@@ -1,0 +1,3 @@
+"""
+SafePlace Core Package
+"""

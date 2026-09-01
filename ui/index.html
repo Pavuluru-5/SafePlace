@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePlace — Offline AI Safety Copilot</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="dark-theme">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="brand">
+            <div class="logo-icon"><i class="fa-solid fa-shield-halved"></i></div>
+            <div>
+                <h1>SafePlace <span class="badge badge-primary">2026</span></h1>
+                <p class="subtitle">Offline-First AI Safety Copilot</p>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="city-selector-box">
+                <i class="fa-solid fa-map-location-dot text-cyan"></i>
+                <select id="city-selector" class="form-select-sm city-dropdown">
+                    <option value="hyderabad" selected>🇮🇳 Hyderabad (HITEC City)</option>
+                    <option value="bangalore">🇮🇳 Bangalore (MG Road)</option>
+                    <option value="delhi">🇮🇳 Delhi (Connaught Place)</option>
+                    <option value="mumbai">🇮🇳 Mumbai (Bandra / BKC)</option>
+                    <option value="san_francisco">🇺🇸 San Francisco (Downtown)</option>
+                </select>
+                <button id="real-gps-btn" class="btn btn-sm btn-outline" title="Use My Real Device GPS Location"><i class="fa-solid fa-crosshairs"></i> Locate Me</button>
+            </div>
+            <div class="status-item">
+                <span class="pulse-dot green"></span>
+                <span id="offline-badge">OFFLINE READY</span>
+            </div>
+            <div class="status-item">
+                <i class="fa-solid fa-location-crosshairs text-blue"></i>
+                <span id="gps-status">GPS Active</span>
+            </div>
+            <div class="status-item">
+                <i class="fa-solid fa-microchip text-purple"></i>
+                <span>LiteRT-LM Gemma</span>
+            </div>
+            <div class="data-age-control">
+                <label for="data-age-slider"><i class="fa-solid fa-clock-rotate-left"></i> Data Age: <span id="data-age-val">0h</span></label>
+                <input type="range" id="data-age-slider" min="0" max="720" value="0" step="12">
+            </div>
+            <button id="sync-btn" class="btn btn-sm btn-outline" title="Re-sync Verified Packages"><i class="fa-solid fa-arrows-rotate"></i> Sync Data</button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-layout">
+        <!-- Left Panel: Safety HUD & Route Comparison -->
+        <aside class="sidebar-left">
+            <!-- Emergency Action -->
+            <div class="emergency-card">
+                <button id="emergency-btn" class="btn btn-emergency">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>I'M NOT SAFE</span>
+                </button>
+                <p class="emergency-hint">Instant 1-tap route to nearest verified secure haven</p>
+            </div>
+
+            <!-- Safe Bubble Summary Card -->
+            <div class="card safe-bubble-card">
+                <div class="card-header">
+                    <h3><i class="fa-solid fa-circle-nodes text-cyan"></i> Dynamic Safe Bubble</h3>
+                    <span id="bubble-status-badge" class="badge badge-success">Active</span>
+                </div>
+                <div class="card-body">
+                    <div class="bubble-stats">
+                        <div class="b-stat">
+                            <span class="stat-num" id="b5-count">--</span>
+                            <span class="stat-label">5 min</span>
+                        </div>
+                        <div class="b-stat">
+                            <span class="stat-num" id="b10-count">--</span>
+                            <span class="stat-label">10 min</span>
+                        </div>
+                        <div class="b-stat">
+                            <span class="stat-num" id="b15-count">--</span>
+                            <span class="stat-label">15 min</span>
+                        </div>
+                        <div class="b-stat">
+                            <span class="stat-num" id="zone-confidence">--%</span>
+                            <span class="stat-label">Confidence</span>
+                        </div>
+                    </div>
+                    <p id="bubble-status-msg" class="bubble-msg">Calculating reachable safe zones...</p>
+                </div>
+            </div>
+
+            <!-- Route Mode Selector & Details -->
+            <div class="card route-card" id="route-panel">
+                <div class="card-header">
+                    <h3><i class="fa-solid fa-route text-blue"></i> Route Navigation</h3>
+                    <div class="route-tabs">
+                        <button id="tab-safest" class="tab-btn active"><i class="fa-solid fa-shield-check"></i> Safest</button>
+                        <button id="tab-fastest" class="tab-btn"><i class="fa-solid fa-bolt"></i> Fastest</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="route-metrics" class="route-metrics-grid">
+                        <div class="metric-item">
+                            <span class="m-val text-green" id="route-safety">--</span>
+                            <span class="m-lbl">Safety Score</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-val text-yellow" id="route-lighting">--%</span>
+                            <span class="m-lbl">Illumination</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-val text-cyan" id="route-time">-- min</span>
+                            <span class="m-lbl">Duration</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-val" id="route-dist">-- m</span>
+                            <span class="m-lbl">Distance</span>
+                        </div>
+                    </div>
+
+                    <div class="evidence-box">
+                        <h4><i class="fa-solid fa-clipboard-check"></i> Why Recommended:</h4>
+                        <ul id="route-why-list">
+                            <li>Select a destination or trigger emergency mode to compare routes.</li>
+                        </ul>
+                    </div>
+
+                    <div class="turn-steps-box">
+                        <h4><i class="fa-solid fa-diamond-turn-right"></i> Navigation Steps:</h4>
+                        <div id="turn-steps-list" class="steps-scroll">
+                            <p class="text-muted">No route active.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nearby Trusted Places List -->
+            <div class="card pois-card">
+                <div class="card-header">
+                    <h3><i class="fa-solid fa-building-shield"></i> Nearby Havens</h3>
+                    <select id="poi-filter" class="form-select-sm">
+                        <option value="">All Types</option>
+                        <option value="police">Police</option>
+                        <option value="hospital">Hospitals</option>
+                        <option value="pharmacy">Pharmacies</option>
+                        <option value="public_building">Public Buildings</option>
+                        <option value="fire_station">Fire Stations</option>
+                    </select>
+                </div>
+                <div class="card-body scrollable-pois" id="poi-list">
+                    <!-- Dynamic POI Cards -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center: Interactive Map -->
+        <section class="map-container">
+            <div id="map"></div>
+            
+            <div class="map-controls-floating">
+                <button id="reset-loc-btn" class="map-float-btn" title="Reset User Location to Center"><i class="fa-solid fa-crosshairs"></i> My Location</button>
+                <div class="map-legend">
+                    <span class="legend-item"><span class="legend-dot dot-safe"></span> Safest Route</span>
+                    <span class="legend-item"><span class="legend-dot dot-fast"></span> Fastest Route (Alley Cut)</span>
+                    <span class="legend-item"><span class="legend-ring ring-5"></span> 5m Bubble</span>
+                    <span class="legend-item"><span class="legend-ring ring-10"></span> 10m Bubble</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Panel: On-Device SLM Safety Assistant -->
+        <aside class="sidebar-right">
+            <div class="chat-header">
+                <div class="ai-title">
+                    <div class="ai-avatar"><i class="fa-solid fa-brain"></i></div>
+                    <div>
+                        <h3>AI Safety Copilot</h3>
+                        <p class="ai-status"><i class="fa-solid fa-circle text-green"></i> On-Device SLM Grounded</p>
+                    </div>
+                </div>
+                <button id="voice-listen-btn" class="btn btn-icon btn-voice" title="Voice Input"><i class="fa-solid fa-microphone"></i></button>
+            </div>
+
+            <!-- Demo Suggested Prompts -->
+            <div class="demo-pills">
+                <span class="pill" data-prompt="Where is the safest place I can reach right now?">🛡️ Safest place nearby?</span>
+                <span class="pill" data-prompt="Why did you choose this route?">🔍 Why this route?</span>
+                <span class="pill" data-prompt="Compare the fastest route with the safest route">⚖️ Compare routes</span>
+                <span class="pill" data-prompt="What is my dynamic safe bubble status?">🌐 Safe Bubble status</span>
+            </div>
+
+            <!-- Chat Messages Display -->
+            <div class="chat-messages" id="chat-messages">
+                <div class="msg msg-ai">
+                    <div class="msg-content">
+                        <strong>SafePlace AI Copilot:</strong>
+                        <p>Hello! I am your offline safety assistant. I monitor your dynamic Safe Bubble, evaluate well-lit corridors and emergency proximity, and explain my recommendations with verified evidence.</p>
+                        <div class="guardrail-tag"><i class="fa-solid fa-check-double"></i> Grounded in local spatial telemetry</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <form id="chat-form" class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Ask a safety question or state your situation..." autocomplete="off">
+                <button type="submit" class="btn btn-primary btn-send"><i class="fa-solid fa-paper-plane"></i></button>
+            </form>
+        </aside>
+    </main>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- App Logic -->
+    <script src="js/app.js"></script>
+</body>
+</html>

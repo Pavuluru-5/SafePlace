@@ -1,0 +1,13 @@
+# SafePlace — Google App Engine Configuration
+runtime: python312
+instance_class: F1
+
+entrypoint: uvicorn api.server:app --host 0.0.0.0 --port $PORT
+
+env_variables:
+  HOST: "0.0.0.0"
+
+handlers:
+  - url: /.*
+    script: auto
+    secure: always
