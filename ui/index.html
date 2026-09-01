@@ -2,8 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SafePlace — Offline AI Safety Copilot</title>
+    <!-- PWA & Mobile Web Meta Tags -->
+    <meta name="theme-color" content="#0b0f19" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SafePlace" />
+    <link rel="manifest" href="manifest.json" />
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- FontAwesome Icons -->
@@ -32,32 +38,33 @@
                     <option value="mumbai">🇮🇳 Mumbai (Bandra / BKC)</option>
                     <option value="san_francisco">🇺🇸 San Francisco (Downtown)</option>
                 </select>
-                <button id="real-gps-btn" class="btn btn-sm btn-outline" title="Use My Real Device GPS Location"><i class="fa-solid fa-crosshairs"></i> Locate Me</button>
+                <button id="real-gps-btn" class="btn btn-sm btn-outline" title="Use My Real Device GPS Location"><i class="fa-solid fa-crosshairs"></i> <span class="btn-text">Locate Me</span></button>
             </div>
-            <div class="status-item">
+            <div class="status-item desktop-only">
                 <span class="pulse-dot green"></span>
                 <span id="offline-badge">OFFLINE READY</span>
             </div>
-            <div class="status-item">
+            <div class="status-item desktop-only">
                 <i class="fa-solid fa-location-crosshairs text-blue"></i>
                 <span id="gps-status">GPS Active</span>
             </div>
-            <div class="status-item">
+            <div class="status-item desktop-only">
                 <i class="fa-solid fa-microchip text-purple"></i>
                 <span>LiteRT-LM Gemma</span>
             </div>
-            <div class="data-age-control">
-                <label for="data-age-slider"><i class="fa-solid fa-clock-rotate-left"></i> Data Age: <span id="data-age-val">0h</span></label>
+            <div class="data-age-control desktop-only">
+                <label for="data-age-slider"><i class="fa-solid fa-clock-rotate-left"></i> Age: <span id="data-age-val">0h</span></label>
                 <input type="range" id="data-age-slider" min="0" max="720" value="0" step="12">
             </div>
-            <button id="sync-btn" class="btn btn-sm btn-outline" title="Re-sync Verified Packages"><i class="fa-solid fa-arrows-rotate"></i> Sync Data</button>
+            <button id="sync-btn" class="btn btn-sm btn-outline desktop-only" title="Re-sync Verified Packages"><i class="fa-solid fa-arrows-rotate"></i> Sync Data</button>
+            <button id="install-app-btn" class="btn btn-sm btn-outline btn-install" style="display:none;" title="Install SafePlace to your phone for 100% offline access"><i class="fa-solid fa-download"></i> <span class="btn-text">Install App</span></button>
         </div>
     </header>
 
     <!-- Main Container -->
-    <main class="main-layout">
+    <main class="main-layout" id="main-layout">
         <!-- Left Panel: Safety HUD & Route Comparison -->
-        <aside class="sidebar-left">
+        <aside class="sidebar-left" id="panel-left">
             <!-- Emergency Action -->
             <div class="emergency-card">
                 <button id="emergency-btn" class="btn btn-emergency">
@@ -141,8 +148,8 @@
                 </div>
             </div>
 
-            <!-- Nearby Trusted Places List -->
-            <div class="card pois-card">
+            <!-- Nearby Trusted Places List (Inside Left Panel for desktop, can be viewed in havens tab on mobile) -->
+            <div class="card pois-card" id="havens-container">
                 <div class="card-header">
                     <h3><i class="fa-solid fa-building-shield"></i> Nearby Havens</h3>
                     <select id="poi-filter" class="form-select-sm">
@@ -161,22 +168,28 @@
         </aside>
 
         <!-- Center: Interactive Map -->
-        <section class="map-container">
+        <section class="map-container" id="panel-map">
             <div id="map"></div>
             
             <div class="map-controls-floating">
                 <button id="reset-loc-btn" class="map-float-btn" title="Reset User Location to Center"><i class="fa-solid fa-crosshairs"></i> My Location</button>
                 <div class="map-legend">
                     <span class="legend-item"><span class="legend-dot dot-safe"></span> Safest Route</span>
-                    <span class="legend-item"><span class="legend-dot dot-fast"></span> Fastest Route (Alley Cut)</span>
+                    <span class="legend-item"><span class="legend-dot dot-fast"></span> Fastest Route</span>
                     <span class="legend-item"><span class="legend-ring ring-5"></span> 5m Bubble</span>
                     <span class="legend-item"><span class="legend-ring ring-10"></span> 10m Bubble</span>
                 </div>
             </div>
+
+            <!-- Mobile Floating Emergency Button on Map -->
+            <button id="mobile-floating-emergency-btn" class="btn btn-emergency mobile-emergency-fab" title="Instant Emergency Routing">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>I'M NOT SAFE</span>
+            </button>
         </section>
 
         <!-- Right Panel: On-Device SLM Safety Assistant -->
-        <aside class="sidebar-right">
+        <aside class="sidebar-right" id="panel-right">
             <div class="chat-header">
                 <div class="ai-title">
                     <div class="ai-avatar"><i class="fa-solid fa-brain"></i></div>
@@ -200,8 +213,8 @@
             <div class="chat-messages" id="chat-messages">
                 <div class="msg msg-ai">
                     <div class="msg-content">
-                        <strong>SafePlace AI Copilot:</strong>
-                        <p>Hello! I am your offline safety assistant. I monitor your dynamic Safe Bubble, evaluate well-lit corridors and emergency proximity, and explain my recommendations with verified evidence.</p>
+                        <strong style="color:var(--color-cyan); font-size:0.8rem;"><i class="fa-solid fa-brain"></i> SafePlace Copilot</strong>
+                        <p>Hello! I am your offline AI safety assistant. I monitor your dynamic Safe Bubble, evaluate well-lit corridors and emergency proximity, and explain my recommendations with verified evidence.</p>
                         <div class="guardrail-tag"><i class="fa-solid fa-check-double"></i> Grounded in local spatial telemetry</div>
                     </div>
                 </div>
@@ -214,6 +227,26 @@
             </form>
         </aside>
     </main>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+        <button class="m-nav-btn active" data-target="map">
+            <i class="fa-solid fa-map-location-dot"></i>
+            <span>Map</span>
+        </button>
+        <button class="m-nav-btn" data-target="hud">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Safety HUD</span>
+        </button>
+        <button class="m-nav-btn" data-target="copilot">
+            <i class="fa-solid fa-brain"></i>
+            <span>AI Copilot</span>
+        </button>
+        <button class="m-nav-btn" data-target="havens">
+            <i class="fa-solid fa-building-shield"></i>
+            <span>Havens</span>
+        </button>
+    </nav>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

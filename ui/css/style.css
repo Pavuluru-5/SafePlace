@@ -687,3 +687,176 @@ body.dark-theme {
     padding: 2px 6px;
     font-size: 0.75rem;
 }
+
+/* Mobile Floating Emergency Button on Map */
+.mobile-emergency-fab {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    border-radius: 25px;
+    display: none;
+    box-shadow: 0 4px 18px rgba(239, 68, 68, 0.55);
+}
+
+/* Mobile Bottom Navigation Bar */
+.mobile-bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: rgba(11, 15, 25, 0.95);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-color);
+    z-index: 2000;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.m-nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 14px;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+}
+
+.m-nav-btn i {
+    font-size: 1.15rem;
+}
+
+.m-nav-btn.active {
+    color: var(--color-cyan);
+}
+
+.m-nav-btn.active i {
+    color: var(--color-primary);
+    transform: scale(1.15);
+}
+
+/* ============================================================
+   RESPONSIVE MEDIA QUERIES (Mobile & Tablet Optimization)
+   ============================================================ */
+@media (max-width: 992px) {
+    .main-layout {
+        grid-template-columns: 1fr;
+        height: calc(100dvh - 58px - 60px);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .desktop-only {
+        display: none !important;
+    }
+
+    .app-header {
+        padding: 8px 14px;
+        gap: 8px;
+    }
+
+    .brand h1 {
+        font-size: 1rem;
+    }
+
+    .brand .subtitle {
+        display: none;
+    }
+
+    .city-dropdown {
+        max-width: 140px;
+        font-size: 0.72rem;
+    }
+
+    .mobile-bottom-nav {
+        display: flex;
+    }
+
+    .mobile-emergency-fab {
+        display: flex;
+    }
+
+    /* Mobile View Switching via Body Classes */
+    .sidebar-left, .map-container, .sidebar-right {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        display: none;
+        border: none;
+    }
+
+    /* Active view display */
+    body.mobile-view-map #panel-map {
+        display: block;
+        z-index: 20;
+    }
+
+    body.mobile-view-hud #panel-left {
+        display: flex;
+        z-index: 20;
+    }
+
+    body.mobile-view-copilot #panel-right {
+        display: flex;
+        z-index: 20;
+    }
+
+    body.mobile-view-havens #panel-left {
+        display: flex;
+        z-index: 20;
+    }
+
+    body.mobile-view-havens #panel-left .card:not(#havens-container),
+    body.mobile-view-havens #panel-left .emergency-card {
+        display: none;
+    }
+
+    body.mobile-view-havens #havens-container {
+        height: 100%;
+    }
+
+    body.mobile-view-havens #havens-container .scrollable-pois {
+        max-height: calc(100vh - 160px);
+    }
+
+    .chat-messages {
+        height: calc(100% - 135px);
+    }
+}
+
+@media (max-width: 480px) {
+    .btn-text {
+        display: none;
+    }
+
+    .brand .logo-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+    }
+
+    .city-selector-box {
+        padding: 3px 6px;
+    }
+
+    .city-dropdown {
+        max-width: 115px;
+    }
+}
+
