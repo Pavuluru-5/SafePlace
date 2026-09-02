@@ -179,6 +179,18 @@
                 <i class="fa-solid fa-hand-pointer text-cyan"></i> Tap map or drag blue pin to set location
             </div>
 
+            <!-- Active Navigation Route HUD Banner -->
+            <div id="active-route-banner" class="active-route-banner" style="display:none;">
+                <div class="route-banner-info">
+                    <i class="fa-solid fa-person-walking"></i>
+                    <div class="banner-text">
+                        <strong id="banner-dest-name">Destination Haven</strong>
+                        <span id="banner-dest-meta">350m • ~4 min walk (Illuminated)</span>
+                    </div>
+                </div>
+                <button class="banner-close-btn" onclick="window.clearActiveRoute()" title="Clear Active Route"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
             <div class="map-controls-floating">
                 <button id="reset-loc-btn" class="map-float-btn" title="Reset User Location to Center"><i class="fa-solid fa-crosshairs"></i> My Location</button>
                 <div class="map-legend">

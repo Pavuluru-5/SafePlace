@@ -589,6 +589,75 @@ body.dark-theme {
     opacity: 0;
 }
 
+/* Floating Active Route Navigation Banner */
+.active-route-banner {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid var(--color-safe);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(16, 185, 129, 0.3);
+    color: var(--text-primary);
+    padding: 8px 14px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 1000;
+    max-width: 92%;
+    transition: all 0.2s ease;
+}
+
+.route-banner-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.route-banner-info i {
+    font-size: 1.1rem;
+    color: var(--color-safe);
+}
+
+.banner-text {
+    min-width: 0;
+}
+
+.banner-text strong {
+    font-size: 0.82rem;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.banner-text span {
+    font-size: 0.7rem;
+    color: var(--color-safe);
+    font-weight: 600;
+    display: block;
+}
+
+.banner-close-btn {
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+}
+
+.banner-close-btn:hover {
+    color: white;
+    background: rgba(239, 68, 68, 0.4);
+}
+
 /* Glassmorphic Toast Notification */
 .safe-toast {
     position: fixed;

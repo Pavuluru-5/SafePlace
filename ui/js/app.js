@@ -683,36 +683,54 @@ window.selectPoiById = function(poiId) {
     calculateAndDrawRoutes(poiId);
     renderPoiList(document.getElementById('poi-filter')?.value || '');
 
-    // Focus marker safely
-    if (state.poiMarkers[poiId] && isMapVisible()) {
-        try {
-            state.poiMarkers[poiId].openPopup();
-        } catch (e) {}
+    const dist = calcHaversineMeters(state.userLat, state.userLon, poi.lat, poi.lon);
+    const walkMin = Math.max(1, Math.round(dist / 75));
+    const distStr = dist < 1000 ? `${dist}m` : `${(dist / 1000).toFixed(1)}km`;
+
+    // Update Floating Map Route Banner
+    const banner = document.getElementById('active-route-banner');
+    const bName = document.getElementById('banner-dest-name');
+    const bMeta = document.getElementById('banner-dest-meta');
+    if (banner && bName && bMeta) {
+        bName.textContent = poi.name;
+        bMeta.textContent = `${distStr} • ~${walkMin} min walk (Illuminated Route)`;
+        banner.style.display = 'flex';
     }
 
-    // On mobile, if on havens tab, switch to map
-    if (window.innerWidth <= 992 && document.body.classList.contains('mobile-view-havens')) {
+    showToast(`Navigating to ${poi.name} • ${distStr} (~${walkMin} min walk)`, 'fa-route', 2500);
+
+    // If on havens tab or copilot on mobile, switch to map
+    if (window.innerWidth <= 992 && !document.body.classList.contains('mobile-view-map')) {
         switchMobileView('map');
+    }
+
+    // Focus marker safely
+    if (state.poiMarkers[poiId] && isMapVisible()) {
+        setTimeout(() => {
+            try {
+                if (state.poiMarkers[poiId]) {
+                    state.poiMarkers[poiId].openPopup();
+                }
+            } catch (e) {}
+        }, 160);
     }
 };
 
-window.viewRouteOnMap = function(poiId) {
-    const poi = state.pois.find(p => p.id === poiId) || state.pois[0];
-    if (!poi) return;
-    state.selectedPoi = poi;
-    calculateAndDrawRoutes(poi.id);
+window.clearActiveRoute = function() {
+    state.selectedPoi = null;
+    state.currentRouteData = null;
+    if (state.routeLayers.safest && map) map.removeLayer(state.routeLayers.safest);
+    if (state.routeLayers.fastest && map) map.removeLayer(state.routeLayers.fastest);
+    state.routeLayers.safest = null;
+    state.routeLayers.fastest = null;
+    const banner = document.getElementById('active-route-banner');
+    if (banner) banner.style.display = 'none';
     renderPoiList(document.getElementById('poi-filter')?.value || '');
-    switchMobileView('map');
-    setTimeout(() => {
-        if (map) {
-            map.invalidateSize(true);
-            if (state.poiMarkers[poi.id]) {
-                try {
-                    state.poiMarkers[poi.id].openPopup();
-                } catch (e) {}
-            }
-        }
-    }, 150);
+    showToast("Route Cleared", "fa-xmark");
+};
+
+window.viewRouteOnMap = function(poiId) {
+    window.selectPoiById(poiId);
 };
 
 function renderPoiList(filterCat = '') {
@@ -992,6 +1010,15 @@ function applyEmergencyPlan(plan) {
     renderRouteMetrics();
     drawRoutePolylines(plan.safest_route, plan.fastest_route || plan.safest_route);
     renderPoiList();
+
+    const banner = document.getElementById('active-route-banner');
+    const bName = document.getElementById('banner-dest-name');
+    const bMeta = document.getElementById('banner-dest-meta');
+    if (banner && bName && bMeta && plan.safest_destination) {
+        bName.textContent = `🚨 ${plan.safest_destination.name}`;
+        bMeta.textContent = `${plan.safest_route.distance_meters}m • ~${plan.safest_route.duration_minutes} min walk (Emergency Route)`;
+        banner.style.display = 'flex';
+    }
 
     addChatMessage(plan.slm_guidance, 'ai', plan.abstained || false, plan.safest_destination);
 
