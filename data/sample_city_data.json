@@ -5,7 +5,7 @@
     "country": "India \ud83c\uddee\ud83c\uddf3",
     "version": "1.1.0",
     "generator": "SafePlace Google Foundry Multi-Region GIS Builder",
-    "created_at": "2026-09-02T14:15:00.066141",
+    "created_at": "2026-09-02T14:54:52.267821",
     "center": {
       "lat": 17.4435,
       "lon": 78.3772
@@ -25,7 +25,7 @@
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Police_Department_Feed",
-      "last_updated": "2026-09-02T12:15:00.066141",
+      "last_updated": "2026-09-02T12:54:52.267821",
       "confidence": 98.0,
       "phone": "+91-40-2785-3418",
       "address": "HITEC City Main Rd, Madhapur",
@@ -41,7 +41,7 @@
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Hospital_Authority_Direct",
-      "last_updated": "2026-09-02T12:15:00.066141",
+      "last_updated": "2026-09-02T12:54:52.267821",
       "confidence": 96.0,
       "phone": "+91-40-6833-4455",
       "address": "Behind Cyber Towers, Madhapur",
@@ -57,7 +57,7 @@
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Municipal_Safety_GIS",
-      "last_updated": "2026-09-02T12:15:00.066141",
+      "last_updated": "2026-09-02T12:54:52.267821",
       "confidence": 94.0,
       "phone": "+91-40-2345-6789",
       "address": "Opp. Cyber Gateway, HITEC City",
@@ -73,7 +73,7 @@
       "accessibility": "full",
       "verification_status": "verified",
       "source": "OpenStreetMap_Verified",
-      "last_updated": "2026-09-02T12:15:00.066141",
+      "last_updated": "2026-09-02T12:54:52.267821",
       "confidence": 92.0,
       "phone": "+91-40-2333-2222",
       "address": "Cyber Towers Junction",
@@ -89,7 +89,7 @@
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Municipal_Safety_GIS",
-      "last_updated": "2026-09-02T12:15:00.066141",
+      "last_updated": "2026-09-02T12:54:52.267821",
       "confidence": 95.0,
       "phone": "+91-40-100",
       "address": "Banjara Hills Rd 12 / Cyberabad",
@@ -105,7 +105,7 @@
       "accessibility": "full",
       "verification_status": "verified",
       "source": "National_Emergency_Registry",
-      "last_updated": "2026-09-02T12:15:00.066141",
+      "last_updated": "2026-09-02T12:54:52.267821",
       "confidence": 95.0,
       "phone": "+91-40-2344-0101",
       "address": "Near Inorbit Mall Link Rd",
@@ -140,7 +140,7 @@
       "cctv_available": true,
       "incident_density": 0.02,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T14:15:00.066141",
+      "last_updated": "2026-09-02T14:54:52.267821",
       "confidence": 95.0
     },
     {
@@ -170,7 +170,7 @@
       "cctv_available": true,
       "incident_density": 0.01,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T14:15:00.066141",
+      "last_updated": "2026-09-02T14:54:52.267821",
       "confidence": 95.0
     },
     {
@@ -200,7 +200,7 @@
       "cctv_available": false,
       "incident_density": 0.7,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T14:15:00.066141",
+      "last_updated": "2026-09-02T14:54:52.267821",
       "confidence": 95.0
     },
     {
@@ -230,7 +230,7 @@
       "cctv_available": false,
       "incident_density": 0.65,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T14:15:00.066141",
+      "last_updated": "2026-09-02T14:54:52.267821",
       "confidence": 95.0
     },
     {
@@ -260,7 +260,7 @@
       "cctv_available": true,
       "incident_density": 0.03,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T14:15:00.066141",
+      "last_updated": "2026-09-02T14:54:52.267821",
       "confidence": 95.0
     }
   ],
@@ -277,7 +277,7 @@
       "count": 11,
       "source": "Municipal_Public_Safety_Records",
       "confidence": 85.0,
-      "last_updated": "2026-09-01T14:15:00.066141"
+      "last_updated": "2026-09-01T14:54:52.267821"
     }
   ]
 }

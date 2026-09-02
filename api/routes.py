@@ -64,8 +64,8 @@ def get_system_status():
 def ensure_location_context(lat: float, lon: float):
     """
     Checks if current database has reachable POIs near (lat, lon).
-    If the nearest POI is > 3500 meters away, automatically seeds the spatial network
-    around (lat, lon) so that all queries succeed smoothly.
+    If the nearest POI is > 600 meters away, automatically seeds the spatial network
+    around (lat, lon) so that all queries and routes succeed with local havens.
     """
     pois = db.get_all_pois()
     if not pois:
@@ -75,7 +75,7 @@ def ensure_location_context(lat: float, lon: float):
         return
 
     min_dist = min(haversine_distance_meters(lat, lon, p.lat, p.lon) for p in pois)
-    if min_dist > 3500:
+    if min_dist > 600:
         from data.dataset_builder import seed_database_with_coords
         seed_database_with_coords(db, lat, lon, "Local Area")
         route_engine.build_graph()

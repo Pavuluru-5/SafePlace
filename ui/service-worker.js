@@ -1,10 +1,10 @@
 /**
- * SafePlace Service Worker — v3
+ * SafePlace Service Worker — v4
  * 100% Autonomous Offline PWA Engine with Cache-First Static Shell,
  * Offline SVG Tile Fallback, and Resilient API Interception.
  */
 
-const CACHE_NAME = 'safeplace-v3';
+const CACHE_NAME = 'safeplace-v4';
 const TILE_CACHE = 'safeplace-tiles-v1';
 
 // Static Shell Assets for 100% Offline Capability
@@ -37,15 +37,17 @@ const OFFLINE_TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="256" he
 
 // Install Event: Pre-cache core shell assets
 self.addEventListener('install', (event) => {
-  console.log('[SafePlace ServiceWorker] Installing v3 offline cache...');
+  console.log('[SafePlace ServiceWorker] Installing v4 offline cache...');
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // Use Promise.allSettled with fetch to avoid one failed asset blocking the rest
       const cachePromises = STATIC_ASSETS.map(async (assetUrl) => {
         try {
           const response = await fetch(assetUrl, { cache: 'no-cache' });
           if (response && (response.ok || response.type === 'opaque')) {
-            await cache.put(assetUrl, response);
+            await cache.put(assetUrl, response.clone());
+            if (assetUrl === '/') {
+              await cache.put('/index.html', response.clone());
+            }
           }
         } catch (err) {
           console.warn('[SafePlace ServiceWorker] Pre-cache skip for:', assetUrl, err);
@@ -60,7 +62,7 @@ self.addEventListener('install', (event) => {
 
 // Activate Event: Clean up legacy caches & take immediate control
 self.addEventListener('activate', (event) => {
-  console.log('[SafePlace ServiceWorker] Activating v3...');
+  console.log('[SafePlace ServiceWorker] Activating v4...');
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -85,38 +87,38 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Navigation Requests (Opening App / Home Screen Shortcut / Reloads)
+  // 1. Navigation Requests (Opening App / Home Screen Shortcut / Reloads / Offline Cold Start)
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       (async () => {
-        try {
-          // Check cache first for exact match or index.html
-          const cached = await caches.match(request, { ignoreSearch: true }) ||
-                         await caches.match('/index.html') ||
-                         await caches.match('/');
-          if (cached) {
-            // Revalidate in background if online
-            fetch(request).then(async (networkResp) => {
-              if (networkResp && networkResp.ok) {
-                const cache = await caches.open(CACHE_NAME);
-                cache.put(request, networkResp);
-              }
-            }).catch(() => {});
-            return cached;
-          }
+        // Cache first for instant zero-network offline launching
+        const cached = await caches.match('/index.html') ||
+                       await caches.match('/') ||
+                       await caches.match(request, { ignoreSearch: true });
+        if (cached) {
+          // Revalidate in background if online
+          fetch(request).then(async (networkResp) => {
+            if (networkResp && networkResp.ok) {
+              const cache = await caches.open(CACHE_NAME);
+              cache.put('/index.html', networkResp.clone());
+              cache.put('/', networkResp.clone());
+            }
+          }).catch(() => {});
+          return cached;
+        }
 
-          // If not in cache, try network
+        try {
           const networkResp = await fetch(request);
           if (networkResp && networkResp.ok) {
             const cache = await caches.open(CACHE_NAME);
-            cache.put(request, networkResp.clone());
+            cache.put('/index.html', networkResp.clone());
+            cache.put('/', networkResp.clone());
           }
           return networkResp;
         } catch (err) {
-          // Offline fallback
           const fallback = await caches.match('/index.html') || await caches.match('/');
           if (fallback) return fallback;
-          return new Response('<!DOCTYPE html><html><body><h2>SafePlace Offline</h2></body></html>', {
+          return new Response('<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="background:#0b0f19;color:#fff;font-family:sans-serif;padding:20px;text-align:center;"><h2>SafePlace Offline</h2><p>Please launch from Home Screen or reload.</p></body></html>', {
             headers: { 'Content-Type': 'text/html' }
           });
         }

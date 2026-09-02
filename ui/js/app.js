@@ -204,8 +204,7 @@ function initMap() {
     map = L.map('map', {
         center: [state.userLat, state.userLon],
         zoom: 15,
-        zoomControl: false,
-        tap: false
+        zoomControl: false
     });
 
     L.control.zoom({ position: 'topright' }).addTo(map);
@@ -481,7 +480,7 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
         // Synthesize dynamic verified havens around the exact pinpoint coordinates
         state.currentCity = "current_gps";
         if (citySelector) citySelector.value = "current_gps";
-        state.pois = generateClientOfflinePoisAroundCoords(lat, lon, locName || "Local Refuge Zone");
+        state.pois = generateClientOfflinePoisAroundCoords(lat, lon, locName || "Local Area");
     }
 
     // --- 1. INSTANT OPTIMISTIC RENDER (< 5ms) ---
@@ -494,7 +493,7 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
     renderPoiList();
     updateSafeBubble();
 
-    // Preserve active route / destination if selected
+    // Recompute route to active destination if selected
     if (state.selectedPoi) {
         const matchingPoi = state.pois.find(p => p.id === state.selectedPoi.id) ||
                             state.pois.find(p => p.category === state.selectedPoi.category) ||
@@ -509,6 +508,9 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
 
     // --- 2. DEBOUNCED FAST SERVER SYNCHRONIZATION (Background) ---
     clearTimeout(syncDebounceTimer);
+    const syncLat = lat;
+    const syncLon = lon;
+
     syncDebounceTimer = setTimeout(() => {
         if (activeSyncController) {
             activeSyncController.abort();
@@ -519,31 +521,34 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                lat: lat,
-                lon: lon,
+                lat: syncLat,
+                lon: syncLon,
                 name: locName || "Live Location"
             }),
             signal: activeSyncController.signal
         })
         .then(res => res.json())
         .then(data => {
-            if (data && data.pois && data.pois.length > 0) {
-                state.pois = data.pois;
-                renderPoiMarkers(state.pois);
-                renderPoiList(document.getElementById('poi-filter')?.value || '');
+            // Guard: Only apply server data if user hasn't moved to another coordinate in the meantime!
+            if (state.userLat === syncLat && state.userLon === syncLon) {
+                if (data && data.pois && data.pois.length > 0) {
+                    state.pois = data.pois;
+                    renderPoiMarkers(state.pois);
+                    renderPoiList(document.getElementById('poi-filter')?.value || '');
+                }
             }
-            return fetchWithTimeout(`/api/safe-bubble?lat=${lat}&lon=${lon}&data_age_hours=${state.dataAgeHours}`, {}, 1500);
+            return fetchWithTimeout(`/api/safe-bubble?lat=${syncLat}&lon=${syncLon}&data_age_hours=${state.dataAgeHours}`, {}, 1500);
         })
         .then(res => res ? res.json() : null)
         .then(bubble => {
-            if (bubble && state.userLat === lat && state.userLon === lon) {
+            if (bubble && state.userLat === syncLat && state.userLon === syncLon) {
                 renderBubbleUI(bubble);
             }
         })
         .catch(() => {
             // Offline or server busy — local engine already active
         });
-    }, 200);
+    }, 150);
 }
 
 // Live Real-Time User GPS Positioning
@@ -860,16 +865,34 @@ function calculateAndDrawRoutes(destinationId) {
     renderRouteMetrics();
     drawRoutePolylines(offlineRoute.safest_route, offlineRoute.fastest_route);
 
+    // Update Floating Map Route Banner
+    const dist = calcHaversineMeters(state.userLat, state.userLon, poi.lat, poi.lon);
+    const walkMin = Math.max(1, Math.round(dist / 75));
+    const distStr = dist < 1000 ? `${dist}m` : `${(dist / 1000).toFixed(1)}km`;
+    const banner = document.getElementById('active-route-banner');
+    const bName = document.getElementById('banner-dest-name');
+    const bMeta = document.getElementById('banner-dest-meta');
+    if (banner && bName && bMeta) {
+        bName.textContent = poi.name;
+        bMeta.textContent = `${distStr} • ~${walkMin} min walk (Illuminated Route)`;
+        banner.style.display = 'flex';
+    }
+
     // Try backend enrichment if online
-    fetchWithTimeout(`/api/route?lat=${state.userLat}&lon=${state.userLon}&destination_id=${destinationId}&data_age_hours=${state.dataAgeHours}`, {}, 1200)
+    const reqLat = state.userLat;
+    const reqLon = state.userLon;
+    fetchWithTimeout(`/api/route?lat=${reqLat}&lon=${reqLon}&destination_id=${destinationId}&data_age_hours=${state.dataAgeHours}`, {}, 1200)
         .then(res => {
             if (!res.ok) throw new Error('Offline');
             return res.json();
         })
         .then(data => {
-            state.currentRouteData = data;
-            renderRouteMetrics();
-            drawRoutePolylines(data.safest_route, data.fastest_route);
+            // Guard: Only apply server enriched route if user is still at the same position and destination
+            if (state.userLat === reqLat && state.userLon === reqLon && state.selectedPoi && state.selectedPoi.id === destinationId) {
+                state.currentRouteData = data;
+                renderRouteMetrics();
+                drawRoutePolylines(data.safest_route, data.fastest_route);
+            }
         })
         .catch(() => {});
 }
@@ -1260,15 +1283,15 @@ function calcHaversineMeters(lat1, lon1, lat2, lon2) {
 }
 
 function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge Zone") {
-    const dLat = 0.0035; // ~380m
-    const dLon = 0.0035; // ~360m
+    const dLat = 0.0028; // ~310m
+    const dLon = 0.0028; // ~290m
     return [
         {
             id: "LOC_POLICE_01",
             name: `District Police Station (${locName})`,
             category: "police",
-            lat: +(lat + dLat * 0.9).toFixed(6),
-            lon: +(lon + dLon * 0.7).toFixed(6),
+            lat: +(lat + dLat * 0.7).toFixed(6),
+            lon: +(lon + dLon * 0.6).toFixed(6),
             opening_hours: "24/7",
             accessibility: "full",
             verification_status: "verified",
@@ -1279,8 +1302,8 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             id: "LOC_HOSPITAL_01",
             name: `Emergency Trauma Centre (${locName})`,
             category: "hospital",
-            lat: +(lat - dLat * 0.75).toFixed(6),
-            lon: +(lon + dLon * 0.85).toFixed(6),
+            lat: +(lat - dLat * 0.6).toFixed(6),
+            lon: +(lon + dLon * 0.7).toFixed(6),
             opening_hours: "24/7",
             accessibility: "full",
             verification_status: "verified",
@@ -1291,8 +1314,8 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             id: "LOC_PHARMACY_01",
             name: "24/7 Medical & Emergency Pharmacy",
             category: "pharmacy",
-            lat: +(lat + dLat * 0.25).toFixed(6),
-            lon: +(lon + dLon * 0.35).toFixed(6),
+            lat: +(lat + dLat * 0.3).toFixed(6),
+            lon: +(lon + dLon * 0.3).toFixed(6),
             opening_hours: "24/7",
             accessibility: "full",
             verification_status: "verified",
@@ -1303,7 +1326,7 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             id: "LOC_TRANSIT_01",
             name: "Central Transit & Safe Refuge Hub",
             category: "transport_hub",
-            lat: +(lat + dLat * 0.8).toFixed(6),
+            lat: +(lat + dLat * 0.6).toFixed(6),
             lon: +(lon - dLon * 0.5).toFixed(6),
             opening_hours: "05:30-23:30",
             accessibility: "full",
@@ -1316,7 +1339,7 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             name: "District Civic Command & Safety Shelter",
             category: "public_building",
             lat: +(lat - dLat * 0.4).toFixed(6),
-            lon: +(lon - dLon * 0.6).toFixed(6),
+            lon: +(lon - dLon * 0.5).toFixed(6),
             opening_hours: "24/7",
             accessibility: "full",
             verification_status: "verified",
@@ -1327,8 +1350,8 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             id: "LOC_FIRE_01",
             name: "Emergency Fire & Rescue Station",
             category: "fire_station",
-            lat: +(lat - dLat * 0.9).toFixed(6),
-            lon: +(lon - dLon * 0.2).toFixed(6),
+            lat: +(lat - dLat * 0.7).toFixed(6),
+            lon: +(lon - dLon * 0.3).toFixed(6),
             opening_hours: "24/7",
             accessibility: "full",
             verification_status: "verified",
