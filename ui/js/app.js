@@ -82,8 +82,15 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileNavigation();
     initPWA();
     
-    // Initial render with saved or default location
-    updateLocation(state.userLat, state.userLon, false, "Initial Position");
+    // Initial render with saved location or auto-detect device GPS
+    const hasSaved = !isNaN(savedLat) && !isNaN(savedLon);
+    updateLocation(state.userLat, state.userLon, false, hasSaved ? "Saved Position" : "Initial Position");
+
+    // Automatically detect live device GPS on startup (works offline via phone GNSS hardware)
+    if ("geolocation" in navigator) {
+        detectAndApplyUserLocation(false);
+        startGpsWatch();
+    }
 });
 
 // PWA Service Worker & Install Prompt Registration
@@ -608,6 +615,41 @@ function detectAndApplyUserLocation(isUserInitiated = false) {
             updateLocation(state.userLat, state.userLon, false, "Saved Position");
         },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+}
+
+let gpsWatchId = null;
+
+function startGpsWatch() {
+    if (!("geolocation" in navigator)) return;
+    if (gpsWatchId !== null) {
+        navigator.geolocation.clearWatch(gpsWatchId);
+    }
+
+    gpsWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const accuracy = pos.coords.accuracy || 15;
+            state.isGpsLocked = true;
+
+            const gpsStatusEl = document.getElementById('gps-status');
+            if (gpsStatusEl) {
+                gpsStatusEl.innerHTML = `<i class="fa-solid fa-location-crosshairs text-green"></i> GPS Live (±${Math.round(accuracy)}m)`;
+            }
+
+            // If user is tracking current GPS location, dynamically relocate if moved >= 20m
+            if (state.currentCity === 'current_gps') {
+                const distMoved = calcHaversineMeters(state.userLat, state.userLon, lat, lon);
+                if (distMoved >= 20) {
+                    updateLocation(lat, lon, false, "Live Movement");
+                }
+            }
+        },
+        (err) => {
+            console.warn('[SafePlace] GPS watch notice:', err.message);
+        },
+        { enableHighAccuracy: true, maximumAge: 8000, timeout: 15000 }
     );
 }
 
