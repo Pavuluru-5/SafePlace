@@ -1,6 +1,6 @@
 # SafePlace — Offline AI Safety Copilot
 
-> **Patchamama 2026 Concept**: An offline-first AI safety copilot that helps a person find the safest reachable place and route, explains why it made the recommendation, continuously monitors a dynamic safety bubble, and explicitly knows when available evidence is insufficient.
+> **Concept**: An offline-first AI safety copilot that helps a person find the safest reachable place and route, explains why it made the recommendation, continuously monitors a dynamic safety bubble, and explicitly knows when available evidence is insufficient.
 
 ---
 
