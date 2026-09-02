@@ -509,13 +509,93 @@ body.dark-theme {
     font-size: 0.62rem;
 }
 
+/* User Location Custom Marker (Touch-Friendly) */
+.user-marker-container {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.user-marker-pin {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    border: 3px solid #ffffff;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.7), 0 0 0 3px rgba(59, 130, 246, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.user-marker-dot {
+    width: 8px;
+    height: 8px;
+    background: #ffffff;
+    border-radius: 50%;
+    transform: rotate(45deg);
+}
+
+.user-marker-pulse {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.25);
+    animation: markerRadar 2.2s infinite ease-out;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes markerRadar {
+    0% { transform: scale(0.6); opacity: 0.9; }
+    50% { transform: scale(1.1); opacity: 0.4; }
+    100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Floating Map Interaction Hint */
+.map-hint-pill {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.88);
+    border: 1px solid var(--border-accent);
+    backdrop-filter: blur(12px);
+    color: var(--text-primary);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.map-hint-pill.fade-out {
+    opacity: 0;
+}
+
 /* Glassmorphic Toast Notification */
 .safe-toast {
     position: fixed;
     top: 72px;
     left: 50%;
     transform: translateX(-50%) translateY(-20px);
-    background: rgba(15, 23, 42, 0.92);
+    background: rgba(15, 23, 42, 0.94);
     border: 1px solid var(--color-cyan);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(6, 182, 212, 0.3);
     backdrop-filter: blur(12px);
@@ -580,6 +660,15 @@ body.dark-theme {
     font-weight: 600;
     cursor: pointer;
     backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.map-float-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--color-primary);
 }
 
 .map-legend {
@@ -722,6 +811,35 @@ body.dark-theme {
     background: rgba(245, 158, 11, 0.08);
 }
 
+.chat-msg-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chat-action-btn {
+    background: rgba(59, 130, 246, 0.18);
+    color: var(--color-cyan);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.chat-action-btn:hover, .chat-action-btn:active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
+}
+
 .guardrail-tag {
     font-size: 0.68rem;
     color: var(--color-safe);
@@ -806,11 +924,10 @@ body.dark-theme {
 /* Mobile Floating Emergency Button on Map */
 .mobile-emergency-fab {
     position: absolute;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: 20px;
+    right: 20px;
     z-index: 1000;
-    padding: 8px 18px;
+    padding: 10px 18px;
     font-size: 0.85rem;
     border-radius: 25px;
     display: none;
@@ -850,6 +967,7 @@ body.dark-theme {
 
 .m-nav-btn i {
     font-size: 1.15rem;
+    transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .m-nav-btn.active {
@@ -867,10 +985,9 @@ body.dark-theme {
 @media (max-width: 992px) {
     .main-layout {
         display: block;
-        grid-template-columns: 1fr;
         flex: 1 1 0;
         min-height: 0;
-        height: auto;
+        height: 100%;
         position: relative;
         overflow: hidden;
         width: 100%;
@@ -906,7 +1023,7 @@ body.dark-theme {
         display: flex;
     }
 
-    /* Mobile View Switching via Body Classes */
+    /* Mobile Panels: Use visibility/opacity instead of display:none to preserve Leaflet map state */
     .sidebar-left, .map-container, .sidebar-right {
         position: absolute;
         top: 0;
@@ -916,19 +1033,27 @@ body.dark-theme {
         width: 100%;
         height: 100%;
         z-index: 10;
-        display: none;
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+        transition: opacity 0.15s ease-in-out;
         border: none;
         padding: 12px;
     }
 
-    /* Active view display */
+    /* Active view displays */
     body.mobile-view-map #panel-map {
-        display: block;
+        opacity: 1;
+        pointer-events: auto;
+        visibility: visible;
         z-index: 20;
         padding: 0;
     }
 
     body.mobile-view-hud #panel-left {
+        opacity: 1;
+        pointer-events: auto;
+        visibility: visible;
         display: flex;
         flex-direction: column;
         overflow-y: auto;
@@ -937,6 +1062,9 @@ body.dark-theme {
     }
 
     body.mobile-view-copilot #panel-right {
+        opacity: 1;
+        pointer-events: auto;
+        visibility: visible;
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -945,6 +1073,9 @@ body.dark-theme {
     }
 
     body.mobile-view-havens #panel-left {
+        opacity: 1;
+        pointer-events: auto;
+        visibility: visible;
         display: flex;
         flex-direction: column;
         overflow-y: auto;
@@ -990,5 +1121,16 @@ body.dark-theme {
     .city-dropdown {
         max-width: 110px;
     }
+
+    .map-controls-floating {
+        bottom: 76px;
+        left: 12px;
+    }
+
+    .mobile-emergency-fab {
+        bottom: 76px;
+        right: 12px;
+    }
 }
+
 

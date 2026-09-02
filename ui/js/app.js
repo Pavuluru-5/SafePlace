@@ -25,7 +25,9 @@ const state = {
         fastest: null
     },
     userMarker: null,
-    isGpsLocked: false
+    isGpsLocked: false,
+    activeTab: 'map',
+    pendingRouteBounds: null
 };
 
 // Map & Layer references
@@ -39,7 +41,7 @@ const MAP_CONFIG = {
 };
 
 // Network Request with Fast Timeout Helper (Prevents hanging UI on offline/flaky connections)
-function fetchWithTimeout(url, options = {}, timeoutMs = 1500) {
+function fetchWithTimeout(url, options = {}, timeoutMs = 2500) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     return fetch(url, {
@@ -65,6 +67,12 @@ function showToast(message, icon = 'fa-location-dot', duration = 2200) {
     toast._hideTimer = setTimeout(() => {
         toast.classList.remove('show');
     }, duration);
+}
+
+// Helper to check if map container is visible
+function isMapVisible() {
+    if (window.innerWidth > 992) return true;
+    return document.body.classList.contains('mobile-view-map');
 }
 
 // Initialize when DOM loads
@@ -157,6 +165,7 @@ function initMobileNavigation() {
 }
 
 function switchMobileView(viewName) {
+    state.activeTab = viewName;
     const navButtons = document.querySelectorAll('.m-nav-btn');
     navButtons.forEach(b => {
         if (b.getAttribute('data-target') === viewName) {
@@ -170,7 +179,17 @@ function switchMobileView(viewName) {
     document.body.classList.add(`mobile-view-${viewName}`);
 
     if (viewName === 'map' && map) {
-        setTimeout(() => { map.invalidateSize(); }, 150);
+        setTimeout(() => {
+            map.invalidateSize(true);
+            if (state.pendingRouteBounds) {
+                try {
+                    map.fitBounds(state.pendingRouteBounds, { padding: [40, 40], maxZoom: 17 });
+                } catch (e) {
+                    map.setView([state.userLat, state.userLon], 15);
+                }
+                state.pendingRouteBounds = null;
+            }
+        }, 120);
     } else if (viewName === 'copilot') {
         const chatContainer = document.getElementById('chat-messages');
         if (chatContainer) {
@@ -185,7 +204,8 @@ function initMap() {
     map = L.map('map', {
         center: [state.userLat, state.userLon],
         zoom: 15,
-        zoomControl: false
+        zoomControl: false,
+        tap: false
     });
 
     L.control.zoom({ position: 'topright' }).addTo(map);
@@ -206,21 +226,35 @@ function initMap() {
         }).addTo(map);
     }
 
-    // User Location Marker (draggable)
+    // Touch-Friendly User Location Marker with Radar Halo
     const userIcon = L.divIcon({
-        className: 'user-marker-icon',
-        html: `<div style="background:#3b82f6; width:18px; height:18px; border-radius:50%; border:3px solid #ffffff; box-shadow:0 0 14px #3b82f6; cursor:grab;"></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9]
+        className: 'user-marker-container',
+        html: `
+            <div class="user-marker-pulse"></div>
+            <div class="user-marker-pin">
+                <div class="user-marker-dot"></div>
+            </div>
+        `,
+        iconSize: [44, 44],
+        iconAnchor: [22, 34],
+        popupAnchor: [0, -30]
     });
 
     state.userMarker = L.marker([state.userLat, state.userLon], {
         draggable: true,
         icon: userIcon,
-        zIndexOffset: 1000
+        zIndexOffset: 1000,
+        autoPan: true
     }).addTo(map);
 
-    state.userMarker.bindPopup("<b>Your GPS Position</b><br>Drag or click map to move").openPopup();
+    state.userMarker.bindPopup("<b>Your Location Pin</b><br>Drag pin or tap map to change").openPopup();
+
+    // Drag events
+    state.userMarker.on('dragstart', () => {
+        state.userMarker.closePopup();
+        const hint = document.getElementById('map-interaction-hint');
+        if (hint) hint.classList.add('fade-out');
+    });
 
     // 60FPS Live Isochrone Tracking during active dragging
     state.userMarker.on('drag', (e) => {
@@ -236,9 +270,11 @@ function initMap() {
         updateLocation(pos.lat, pos.lng, false, "Dragged Location");
     });
 
-    // Instant Location Update on Map Click
+    // Instant Location Update on Map Click / Tap
     map.on('click', (e) => {
-        updateLocation(e.latlng.lat, e.latlng.lng, false, "Selected Map Point");
+        const hint = document.getElementById('map-interaction-hint');
+        if (hint) hint.classList.add('fade-out');
+        updateLocation(e.latlng.lat, e.latlng.lng, false, "Selected Location");
     });
 }
 
@@ -257,6 +293,9 @@ function initEventListeners() {
             map.setView([preset.center.lat, preset.center.lon], 15);
             updateLocation(preset.center.lat, preset.center.lon, true, preset.name);
             addChatMessage(`Switched location to **${preset.name}**. Verified municipal havens and safe corridors loaded.`, 'ai');
+            if (window.innerWidth <= 992) {
+                switchMobileView('map');
+            }
         });
     }
 
@@ -423,29 +462,21 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
     localStorage.setItem('safeplace_last_lat', lat.toString());
     localStorage.setItem('safeplace_last_lon', lon.toString());
 
-    // Check distance to presets
-    let closestPresetKey = null;
-    let minDistance = Infinity;
-
-    for (const [key, preset] of Object.entries(OFFLINE_CITY_PRESETS)) {
-        const d = calcHaversineMeters(lat, lon, preset.center.lat, preset.center.lon);
-        if (d < minDistance) {
-            minDistance = d;
-            closestPresetKey = key;
-        }
-    }
-
     const citySelector = document.getElementById('city-selector');
 
-    if (isPresetSwitch && closestPresetKey) {
-        state.currentCity = closestPresetKey;
-        if (citySelector) citySelector.value = closestPresetKey;
-        state.pois = getClientOfflinePois(closestPresetKey);
-    } else if (minDistance <= 2500 && closestPresetKey) {
-        // Within 2.5km of preset center, use preset havens
-        state.currentCity = closestPresetKey;
-        if (citySelector) citySelector.value = closestPresetKey;
-        state.pois = getClientOfflinePois(closestPresetKey);
+    if (isPresetSwitch) {
+        let closestPresetKey = null;
+        let minDistance = Infinity;
+        for (const [key, preset] of Object.entries(OFFLINE_CITY_PRESETS)) {
+            const d = calcHaversineMeters(lat, lon, preset.center.lat, preset.center.lon);
+            if (d < minDistance) {
+                minDistance = d;
+                closestPresetKey = key;
+            }
+        }
+        state.currentCity = closestPresetKey || 'hyderabad';
+        if (citySelector) citySelector.value = state.currentCity;
+        state.pois = getClientOfflinePois(state.currentCity);
     } else {
         // Synthesize dynamic verified havens around the exact pinpoint coordinates
         state.currentCity = "current_gps";
@@ -456,7 +487,7 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
     // --- 1. INSTANT OPTIMISTIC RENDER (< 5ms) ---
     if (state.userMarker) {
         state.userMarker.setLatLng([lat, lon]);
-        state.userMarker.bindPopup(`<b>Your GPS Position</b><br>Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}<br><span style="color:#10b981; font-weight:600;">✓ ${state.pois.length} Local Havens Verified</span>`).openPopup();
+        state.userMarker.bindPopup(`<b>Your Location</b><br>Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}<br><span style="color:#10b981; font-weight:600;">✓ ${state.pois.length} Verified Safe Havens Active</span>`);
     }
 
     renderPoiMarkers(state.pois);
@@ -495,15 +526,19 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
             signal: activeSyncController.signal
         })
         .then(res => res.json())
-        .then(() => {
-            // Background sync succeeded, refresh bubble telemetry from server
-            fetchWithTimeout(`/api/safe-bubble?lat=${lat}&lon=${lon}&data_age_hours=${state.dataAgeHours}`, {}, 1200)
-                .then(res => res.json())
-                .then(bubble => {
-                    if (state.userLat === lat && state.userLon === lon) {
-                        renderBubbleUI(bubble);
-                    }
-                }).catch(() => {});
+        .then(data => {
+            if (data && data.pois && data.pois.length > 0) {
+                state.pois = data.pois;
+                renderPoiMarkers(state.pois);
+                renderPoiList(document.getElementById('poi-filter')?.value || '');
+            }
+            return fetchWithTimeout(`/api/safe-bubble?lat=${lat}&lon=${lon}&data_age_hours=${state.dataAgeHours}`, {}, 1500);
+        })
+        .then(res => res ? res.json() : null)
+        .then(bubble => {
+            if (bubble && state.userLat === lat && state.userLon === lon) {
+                renderBubbleUI(bubble);
+            }
         })
         .catch(() => {
             // Offline or server busy — local engine already active
@@ -551,6 +586,10 @@ function detectAndApplyUserLocation(isUserInitiated = false) {
 
             updateLocation(lat, lon, false, "Live GPS Location");
             addChatMessage(`📍 **GPS Position Locked**: Centered on (**${lat.toFixed(4)}, ${lon.toFixed(4)}**). Dynamic Safe Bubble and 24/7 verified refuge havens generated around your real location.`, 'ai');
+            
+            if (window.innerWidth <= 992) {
+                switchMobileView('map');
+            }
         },
         (error) => {
             console.warn('[SafePlace] Geolocation notice:', error.message);
@@ -616,7 +655,7 @@ function renderPoiMarkers(pois) {
             <div style="color:#0f172a; min-width:160px; font-family:system-ui, sans-serif;">
                 <strong style="font-size:14px; display:block; margin-bottom:2px;">${p.name}</strong>
                 <div style="font-size:12px; color:#475569; margin-bottom:6px;">
-                    <span style="font-weight:600; color:${color};">${p.category.replace('_', ' ').toUpperCase()}</span> • ${p.opening_hours}
+                    <span style="font-weight:600; color:${color};">${(p.category || '').replace('_', ' ').toUpperCase()}</span> • ${p.opening_hours}
                 </div>
                 <div style="font-size:11px; color:#64748b; margin-bottom:8px;">
                     📍 <strong>${dist}m</strong> away (~${walkMin} min walk)
@@ -644,15 +683,36 @@ window.selectPoiById = function(poiId) {
     calculateAndDrawRoutes(poiId);
     renderPoiList(document.getElementById('poi-filter')?.value || '');
 
-    // Focus marker
-    if (state.poiMarkers[poiId]) {
-        state.poiMarkers[poiId].openPopup();
+    // Focus marker safely
+    if (state.poiMarkers[poiId] && isMapVisible()) {
+        try {
+            state.poiMarkers[poiId].openPopup();
+        } catch (e) {}
     }
 
     // On mobile, if on havens tab, switch to map
     if (window.innerWidth <= 992 && document.body.classList.contains('mobile-view-havens')) {
         switchMobileView('map');
     }
+};
+
+window.viewRouteOnMap = function(poiId) {
+    const poi = state.pois.find(p => p.id === poiId) || state.pois[0];
+    if (!poi) return;
+    state.selectedPoi = poi;
+    calculateAndDrawRoutes(poi.id);
+    renderPoiList(document.getElementById('poi-filter')?.value || '');
+    switchMobileView('map');
+    setTimeout(() => {
+        if (map) {
+            map.invalidateSize(true);
+            if (state.poiMarkers[poi.id]) {
+                try {
+                    state.poiMarkers[poi.id].openPopup();
+                } catch (e) {}
+            }
+        }
+    }, 150);
 };
 
 function renderPoiList(filterCat = '') {
@@ -671,7 +731,7 @@ function renderPoiList(filterCat = '') {
     enriched.sort((a, b) => a.distance_meters - b.distance_meters);
 
     const filtered = filterCat 
-        ? enriched.filter(p => p.category.toLowerCase() === filterCat.toLowerCase())
+        ? enriched.filter(p => (p.category || '').toLowerCase() === filterCat.toLowerCase())
         : enriched;
 
     filtered.forEach(p => {
@@ -797,31 +857,41 @@ function calculateAndDrawRoutes(destinationId) {
 }
 
 function drawRoutePolylines(safest, fastest) {
-    if (state.routeLayers.safest) map.removeLayer(state.routeLayers.safest);
-    if (state.routeLayers.fastest) map.removeLayer(state.routeLayers.fastest);
+    if (state.routeLayers.safest && map) map.removeLayer(state.routeLayers.safest);
+    if (state.routeLayers.fastest && map) map.removeLayer(state.routeLayers.fastest);
 
     if (!safest || !safest.path_coordinates || safest.path_coordinates.length < 2) return;
 
-    state.routeLayers.safest = L.polyline(safest.path_coordinates, {
-        color: '#10b981',
-        weight: 6,
-        opacity: 0.9,
-        lineCap: 'round'
-    }).addTo(map);
-
-    if (fastest && fastest.path_coordinates && fastest.path_coordinates.length > 1) {
-        state.routeLayers.fastest = L.polyline(fastest.path_coordinates, {
-            color: '#f59e0b',
-            weight: 4,
-            opacity: 0.8,
-            dashArray: '8, 8'
+    if (map) {
+        state.routeLayers.safest = L.polyline(safest.path_coordinates, {
+            color: '#10b981',
+            weight: 6,
+            opacity: 0.9,
+            lineCap: 'round'
         }).addTo(map);
+
+        if (fastest && fastest.path_coordinates && fastest.path_coordinates.length > 1) {
+            state.routeLayers.fastest = L.polyline(fastest.path_coordinates, {
+                color: '#f59e0b',
+                weight: 4,
+                opacity: 0.8,
+                dashArray: '8, 8'
+            }).addTo(map);
+        }
     }
 
     const allCoords = safest.path_coordinates.concat(fastest ? fastest.path_coordinates : []);
     if (allCoords.length > 0) {
         const bounds = L.latLngBounds(allCoords);
-        map.fitBounds(bounds, { padding: [40, 40] });
+        if (isMapVisible() && map) {
+            try {
+                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+            } catch (e) {
+                console.warn('fitBounds deferred:', e);
+            }
+        } else {
+            state.pendingRouteBounds = bounds;
+        }
     }
 }
 
@@ -880,7 +950,7 @@ function triggerEmergencyMode() {
         safest_destination: nearestPoi,
         safest_route: routeData.safest_route,
         fastest_route: routeData.fastest_route,
-        slm_guidance: `🚨 **SafePlace Emergency Action**:\nProceed immediately to **${nearestPoi.name}** (${nearestPoi.category.replace('_', ' ').toUpperCase()}).\n• Distance: ${routeData.safest_route.distance_meters}m (~${routeData.safest_route.duration_minutes} min walk)\n• Illumination: ${routeData.safest_route.lighting_percentage}% (Well-lit)\n• Status: Verified 24/7 staffing.`
+        slm_guidance: `🚨 **SafePlace Emergency Action**:\nProceed immediately to **${nearestPoi.name}** (${(nearestPoi.category || '').replace('_', ' ').toUpperCase()}).\n• Distance: ${routeData.safest_route.distance_meters}m (~${routeData.safest_route.duration_minutes} min walk)\n• Illumination: ${routeData.safest_route.lighting_percentage}% (Well-lit)\n• Status: Verified 24/7 staffing.`
     };
 
     // Instant optimistic emergency plan
@@ -923,7 +993,7 @@ function applyEmergencyPlan(plan) {
     drawRoutePolylines(plan.safest_route, plan.fastest_route || plan.safest_route);
     renderPoiList();
 
-    addChatMessage(plan.slm_guidance, 'ai', plan.abstained || false);
+    addChatMessage(plan.slm_guidance, 'ai', plan.abstained || false, plan.safest_destination);
 
     // Switch to map on mobile
     if (window.innerWidth <= 992) {
@@ -936,6 +1006,7 @@ function applyEmergencyPlan(plan) {
             const utterance = new SpeechSynthesisUtterance(
                 `Emergency Mode Active. Proceed to ${plan.safest_destination.name}. Route duration is ${plan.safest_route.duration_minutes} minutes along illuminated streets.`
             );
+            utterance.onerror = () => {};
             window.speechSynthesis.speak(utterance);
         } catch (e) {
             console.warn(e);
@@ -974,7 +1045,7 @@ function sendUserChatMessage(text) {
             user_lon: state.userLon,
             data_age_hours_override: state.dataAgeHours
         })
-    }, 1500)
+    }, 2500)
     .then(res => {
         if (!res.ok) throw new Error(`API error (${res.status})`);
         return res.json();
@@ -994,12 +1065,14 @@ function handleChatResponse(resp) {
     if (typingEl) typingEl.remove();
 
     const responseText = resp.response_text || 'No response generated.';
-    addChatMessage(responseText, 'ai', resp.abstained || false);
+    addChatMessage(responseText, 'ai', resp.abstained || false, resp.suggested_poi);
 
     if (resp.suggested_poi) {
         state.selectedPoi = resp.suggested_poi;
-        if (state.poiMarkers[resp.suggested_poi.id]) {
-            state.poiMarkers[resp.suggested_poi.id].openPopup();
+        if (state.poiMarkers[resp.suggested_poi.id] && isMapVisible()) {
+            try {
+                state.poiMarkers[resp.suggested_poi.id].openPopup();
+            } catch (e) {}
         }
 
         if (resp.suggested_route && resp.suggested_route.path_coordinates && resp.suggested_route.path_coordinates.length > 1) {
@@ -1023,7 +1096,8 @@ function handleChatResponse(resp) {
         try {
             window.speechSynthesis.cancel();
             const cleanText = responseText.replace(/[*#•_`~]/g, '');
-            const utter = new SpeechSynthesisUtterance(cleanText.substring(0, 180));
+            const utter = new SpeechSynthesisUtterance(cleanText.substring(0, 160));
+            utter.onerror = () => {};
             window.speechSynthesis.speak(utter);
         } catch (e) {
             console.warn('Speech synthesis notice:', e);
@@ -1031,7 +1105,7 @@ function handleChatResponse(resp) {
     }
 }
 
-function addChatMessage(content, sender, isAbstained = false) {
+function addChatMessage(content, sender, isAbstained = false, suggestedPoi = null) {
     const chatContainer = document.getElementById('chat-messages');
     if (!chatContainer) return;
 
@@ -1058,12 +1132,24 @@ function addChatMessage(content, sender, isAbstained = false) {
             ? `<div class="guardrail-tag" style="color:#f59e0b;"><i class="fa-solid fa-triangle-exclamation"></i> Uncertainty Aware: Abstaining due to stale evidence</div>`
             : `<div class="guardrail-tag"><i class="fa-solid fa-check-double"></i> Grounded in local spatial telemetry</div>`;
 
+        let actionBtnHtml = '';
+        if (suggestedPoi && suggestedPoi.id) {
+            actionBtnHtml = `
+                <div class="chat-msg-actions">
+                    <button class="chat-action-btn" onclick="window.viewRouteOnMap('${suggestedPoi.id}')">
+                        <i class="fa-solid fa-map-location-dot"></i> View Route on Map
+                    </button>
+                </div>
+            `;
+        }
+
         msgDiv.innerHTML = `
             <div class="msg-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                     <strong style="color:var(--color-cyan); font-size:0.8rem;"><i class="fa-solid fa-brain"></i> SafePlace Copilot</strong>
                 </div>
                 <div>${formatted}</div>
+                ${actionBtnHtml}
                 ${tag}
             </div>
         `;
@@ -1151,7 +1237,7 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
     const dLon = 0.0035; // ~360m
     return [
         {
-            id: "GPS_POLICE_01",
+            id: "LOC_POLICE_01",
             name: `District Police Station (${locName})`,
             category: "police",
             lat: +(lat + dLat * 0.9).toFixed(6),
@@ -1159,11 +1245,11 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             opening_hours: "24/7",
             accessibility: "full",
             verification_status: "verified",
-            phone: "112 / 100",
+            phone: "+91-100 / Emergency 112",
             address: "Police Station Road"
         },
         {
-            id: "GPS_HOSPITAL_01",
+            id: "LOC_HOSPITAL_01",
             name: `Emergency Trauma Centre (${locName})`,
             category: "hospital",
             lat: +(lat - dLat * 0.75).toFixed(6),
@@ -1171,11 +1257,11 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             opening_hours: "24/7",
             accessibility: "full",
             verification_status: "verified",
-            phone: "108 / 102",
+            phone: "+91-108 / +91-102",
             address: "Hospital Care Way"
         },
         {
-            id: "GPS_PHARMACY_01",
+            id: "LOC_PHARMACY_01",
             name: "24/7 Medical & Emergency Pharmacy",
             category: "pharmacy",
             lat: +(lat + dLat * 0.25).toFixed(6),
@@ -1187,7 +1273,7 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             address: "Main Commercial Avenue"
         },
         {
-            id: "GPS_TRANSIT_01",
+            id: "LOC_TRANSIT_01",
             name: "Central Transit & Safe Refuge Hub",
             category: "transport_hub",
             lat: +(lat + dLat * 0.8).toFixed(6),
@@ -1199,7 +1285,7 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             address: "Transit Station Plaza"
         },
         {
-            id: "GPS_CIVIC_01",
+            id: "LOC_CIVIC_01",
             name: "District Civic Command & Safety Shelter",
             category: "public_building",
             lat: +(lat - dLat * 0.4).toFixed(6),
@@ -1211,7 +1297,7 @@ function generateClientOfflinePoisAroundCoords(lat, lon, locName = "Local Refuge
             address: "Civic Complex Road"
         },
         {
-            id: "GPS_FIRE_01",
+            id: "LOC_FIRE_01",
             name: "Emergency Fire & Rescue Station",
             category: "fire_station",
             lat: +(lat - dLat * 0.9).toFixed(6),

@@ -1,283 +1,335 @@
 {
   "metadata": {
-    "city_key": "hyderabad",
-    "city_name": "Hyderabad (HITEC City / Madhapur)",
+    "city_key": "custom_gps",
+    "city_name": "Koramangala",
     "country": "India \ud83c\uddee\ud83c\uddf3",
     "version": "1.1.0",
-    "generator": "SafePlace Google Foundry Multi-Region GIS Builder",
-    "created_at": "2026-09-02T13:15:09.276133",
+    "generator": "SafePlace Dynamic Realtime GPS Seeder",
+    "created_at": "2026-09-02T13:51:20.149263",
     "center": {
-      "lat": 17.4435,
-      "lon": 78.3772
+      "lat": 12.9352,
+      "lon": 77.6245
     },
     "total_pois": 6,
-    "total_segments": 5,
+    "total_segments": 7,
     "total_incidents": 1
   },
   "pois": [
     {
-      "id": "HYD_POLICE_01",
-      "name": "Cyberabad Police Station (Madhapur)",
+      "id": "LOC_POLICE_01",
+      "name": "District Police Station (Koramangala)",
       "category": "police",
-      "lat": 17.4485,
-      "lon": 78.381,
+      "lat": 12.93835,
+      "lon": 77.62695,
       "opening_hours": "24/7",
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Police_Department_Feed",
-      "last_updated": "2026-09-02T11:15:09.276133",
+      "last_updated": "2026-09-02T11:51:20.149263",
       "confidence": 98.0,
-      "phone": "+91-40-2785-3418",
-      "address": "HITEC City Main Rd, Madhapur",
+      "phone": "+91-100 / Emergency 112",
+      "address": "Police Station Rd",
       "capacity_level": "normal"
     },
     {
-      "id": "HYD_HOSPITAL_01",
-      "name": "Medicover Hospital & Emergency Trauma",
+      "id": "LOC_HOSPITAL_01",
+      "name": "Emergency Trauma Centre (Koramangala)",
       "category": "hospital",
-      "lat": 17.441,
-      "lon": 78.3825,
+      "lat": 12.932575,
+      "lon": 77.627475,
       "opening_hours": "24/7",
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Hospital_Authority_Direct",
-      "last_updated": "2026-09-02T11:15:09.276133",
+      "last_updated": "2026-09-02T13:51:20.149263",
       "confidence": 96.0,
-      "phone": "+91-40-6833-4455",
-      "address": "Behind Cyber Towers, Madhapur",
+      "phone": "+91-108 / +91-102",
+      "address": "Hospital Care Way",
       "capacity_level": "normal"
     },
     {
-      "id": "HYD_PHARMACY_01",
-      "name": "Apollo Pharmacy 24/7 Emergency Care",
+      "id": "LOC_PHARMACY_01",
+      "name": "24/7 Medical & Emergency Pharmacy",
       "category": "pharmacy",
-      "lat": 17.444,
-      "lon": 78.3785,
+      "lat": 12.936075,
+      "lon": 77.625725,
       "opening_hours": "24/7",
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Municipal_Safety_GIS",
-      "last_updated": "2026-09-02T11:15:09.276133",
+      "last_updated": "2026-09-02T11:51:20.149263",
       "confidence": 94.0,
-      "phone": "+91-40-2345-6789",
-      "address": "Opp. Cyber Gateway, HITEC City",
+      "phone": "+91-1800-200-999",
+      "address": "Main Commercial Avenue",
       "capacity_level": "normal"
     },
     {
-      "id": "HYD_TRANSIT_01",
-      "name": "HITEC City Metro Station & Transit Hub",
+      "id": "LOC_TRANSIT_01",
+      "name": "Central Transit & Safe Refuge Hub",
       "category": "transport_hub",
-      "lat": 17.4465,
-      "lon": 78.376,
-      "opening_hours": "06:00-23:00",
+      "lat": 12.938,
+      "lon": 77.62275,
+      "opening_hours": "05:30-23:30",
       "accessibility": "full",
       "verification_status": "verified",
-      "source": "OpenStreetMap_Verified",
-      "last_updated": "2026-09-02T11:15:09.276133",
+      "source": "Transit_Authority",
+      "last_updated": "2026-09-02T11:51:20.149263",
       "confidence": 92.0,
-      "phone": "+91-40-2333-2222",
-      "address": "Cyber Towers Junction",
+      "phone": "139",
+      "address": "Transit Station Plaza",
       "capacity_level": "normal"
     },
     {
-      "id": "HYD_CIVIC_01",
-      "name": "Telangana State Police Command & Control Centre",
+      "id": "LOC_PUBLIC_01",
+      "name": "District Civic Command & Safety Shelter",
       "category": "public_building",
-      "lat": 17.449,
-      "lon": 78.374,
+      "lat": 12.9338,
+      "lon": 77.6224,
       "opening_hours": "24/7",
       "accessibility": "full",
       "verification_status": "verified",
       "source": "Municipal_Safety_GIS",
-      "last_updated": "2026-09-02T11:15:09.276133",
-      "confidence": 95.0,
-      "phone": "+91-40-100",
-      "address": "Banjara Hills Rd 12 / Cyberabad",
+      "last_updated": "2026-09-01T13:51:20.149263",
+      "confidence": 91.0,
+      "phone": "100",
+      "address": "Civic Complex Road",
       "capacity_level": "normal"
     },
     {
-      "id": "HYD_FIRE_01",
-      "name": "Madhapur Fire Station",
+      "id": "LOC_FIRE_01",
+      "name": "Emergency Fire & Rescue Station",
       "category": "fire_station",
-      "lat": 17.4395,
-      "lon": 78.375,
+      "lat": 12.93205,
+      "lon": 77.6238,
       "opening_hours": "24/7",
       "accessibility": "full",
       "verification_status": "verified",
       "source": "National_Emergency_Registry",
-      "last_updated": "2026-09-02T11:15:09.276133",
+      "last_updated": "2026-09-02T13:51:20.149263",
       "confidence": 95.0,
-      "phone": "+91-40-2344-0101",
-      "address": "Near Inorbit Mall Link Rd",
+      "phone": "101",
+      "address": "Emergency Service Link",
       "capacity_level": "normal"
     }
   ],
   "road_segments": [
     {
-      "id": "HYD_SEG_01",
+      "id": "LOC_SEG_01",
       "u_node": "N1",
       "v_node": "N2",
-      "name": "HITEC City Main Boulevard (Illuminated 6-Lane)",
+      "name": "Main Illuminated Avenue",
       "road_type": "primary",
       "geometry": [
         [
-          17.4435,
-          78.3772
+          12.9352,
+          77.6245
         ],
         [
-          17.445,
-          78.3765
+          12.936775,
+          77.625725
         ],
         [
-          17.4465,
-          78.376
+          12.93835,
+          77.62695
         ]
       ],
-      "length_meters": 360.0,
+      "length_meters": 490.0,
       "lighting": 0.95,
       "footpath": true,
       "activity_proxy": 0.9,
       "cctv_available": true,
       "incident_density": 0.02,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T13:15:09.276133",
+      "last_updated": "2026-09-02T13:51:20.149263",
       "confidence": 95.0
     },
     {
-      "id": "HYD_SEG_02",
-      "u_node": "N2",
-      "v_node": "N3",
-      "name": "Cyberabad Police Commissionerate Avenue",
-      "road_type": "primary",
-      "geometry": [
-        [
-          17.4465,
-          78.376
-        ],
-        [
-          17.4475,
-          78.378
-        ],
-        [
-          17.4485,
-          78.3805
-        ]
-      ],
-      "length_meters": 540.0,
-      "lighting": 1.0,
-      "footpath": true,
-      "activity_proxy": 0.95,
-      "cctv_available": true,
-      "incident_density": 0.01,
-      "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T13:15:09.276133",
-      "confidence": 95.0
-    },
-    {
-      "id": "HYD_SEG_03",
+      "id": "LOC_SEG_02",
       "u_node": "N1",
-      "v_node": "N4",
-      "name": "Guttala Begumpet Unlit Alley Cut (High Risk Shortcut)",
-      "road_type": "alley",
-      "geometry": [
-        [
-          17.4435,
-          78.3772
-        ],
-        [
-          17.4445,
-          78.3785
-        ],
-        [
-          17.4455,
-          78.3795
-        ]
-      ],
-      "length_meters": 290.0,
-      "lighting": 0.1,
-      "footpath": false,
-      "activity_proxy": 0.15,
-      "cctv_available": false,
-      "incident_density": 0.7,
-      "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T13:15:09.276133",
-      "confidence": 95.0
-    },
-    {
-      "id": "HYD_SEG_04",
-      "u_node": "N4",
       "v_node": "N3",
-      "name": "Backlane Drainage Cut",
+      "name": "Unlit Narrow Backlane (Dark Shortcut)",
       "road_type": "alley",
       "geometry": [
         [
-          17.4455,
-          78.3795
+          12.9352,
+          77.6245
         ],
         [
-          17.447,
-          78.38
+          12.93695,
+          77.62625
         ],
         [
-          17.4485,
-          78.3805
+          12.93835,
+          77.62695
         ]
       ],
-      "length_meters": 340.0,
-      "lighting": 0.15,
+      "length_meters": 370.0,
+      "lighting": 0.1,
       "footpath": false,
       "activity_proxy": 0.1,
       "cctv_available": false,
-      "incident_density": 0.65,
+      "incident_density": 0.7,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T13:15:09.276133",
-      "confidence": 95.0
+      "last_updated": "2026-09-01T13:51:20.149263",
+      "confidence": 68.0
     },
     {
-      "id": "HYD_SEG_05",
+      "id": "LOC_SEG_03",
       "u_node": "N1",
-      "v_node": "N5",
-      "name": "Hospital Access Expressway",
+      "v_node": "N4",
+      "name": "Hospital Access Boulevard",
       "road_type": "secondary",
       "geometry": [
         [
-          17.4435,
-          78.3772
+          12.9352,
+          77.6245
         ],
         [
-          17.4425,
-          78.379
+          12.9338,
+          77.6259
         ],
         [
-          17.4415,
-          78.381
+          12.932575,
+          77.627475
         ]
       ],
-      "length_meters": 450.0,
+      "length_meters": 470.0,
       "lighting": 0.9,
       "footpath": true,
       "activity_proxy": 0.8,
       "cctv_available": true,
       "incident_density": 0.03,
       "speed_kmh": 4.5,
-      "last_updated": "2026-09-02T13:15:09.276133",
+      "last_updated": "2026-09-02T13:51:20.149263",
+      "confidence": 94.0
+    },
+    {
+      "id": "LOC_SEG_04",
+      "u_node": "N1",
+      "v_node": "N5",
+      "name": "Commercial Market Corridor",
+      "road_type": "primary",
+      "geometry": [
+        [
+          12.9352,
+          77.6245
+        ],
+        [
+          12.936075,
+          77.625725
+        ]
+      ],
+      "length_meters": 210.0,
+      "lighting": 0.95,
+      "footpath": true,
+      "activity_proxy": 0.88,
+      "cctv_available": true,
+      "incident_density": 0.02,
+      "speed_kmh": 4.5,
+      "last_updated": "2026-09-02T13:51:20.149263",
+      "confidence": 95.0
+    },
+    {
+      "id": "LOC_SEG_05",
+      "u_node": "N1",
+      "v_node": "N6",
+      "name": "Transit Concourse Way",
+      "road_type": "primary",
+      "geometry": [
+        [
+          12.9352,
+          77.6245
+        ],
+        [
+          12.9366,
+          77.6238
+        ],
+        [
+          12.938,
+          77.62275
+        ]
+      ],
+      "length_meters": 430.0,
+      "lighting": 0.92,
+      "footpath": true,
+      "activity_proxy": 0.85,
+      "cctv_available": true,
+      "incident_density": 0.04,
+      "speed_kmh": 4.5,
+      "last_updated": "2026-09-02T13:51:20.149263",
+      "confidence": 93.0
+    },
+    {
+      "id": "LOC_SEG_06",
+      "u_node": "N1",
+      "v_node": "N7",
+      "name": "Civic Link Promenade",
+      "road_type": "secondary",
+      "geometry": [
+        [
+          12.9352,
+          77.6245
+        ],
+        [
+          12.9338,
+          77.6224
+        ]
+      ],
+      "length_meters": 340.0,
+      "lighting": 0.85,
+      "footpath": true,
+      "activity_proxy": 0.75,
+      "cctv_available": true,
+      "incident_density": 0.05,
+      "speed_kmh": 4.5,
+      "last_updated": "2026-09-01T13:51:20.149263",
+      "confidence": 90.0
+    },
+    {
+      "id": "LOC_SEG_07",
+      "u_node": "N1",
+      "v_node": "N8",
+      "name": "Emergency Rescue Expressway",
+      "road_type": "primary",
+      "geometry": [
+        [
+          12.9352,
+          77.6245
+        ],
+        [
+          12.93345,
+          77.62415
+        ],
+        [
+          12.93205,
+          77.6238
+        ]
+      ],
+      "length_meters": 460.0,
+      "lighting": 0.9,
+      "footpath": true,
+      "activity_proxy": 0.8,
+      "cctv_available": true,
+      "incident_density": 0.02,
+      "speed_kmh": 4.5,
+      "last_updated": "2026-09-02T13:51:20.149263",
       "confidence": 95.0
     }
   ],
   "incident_aggregates": [
     {
-      "id": "HYD_INC_01",
-      "area_grid": "GRID_GUTTALA_ALLEY",
-      "lat": 17.4455,
-      "lon": 78.3795,
-      "radius_meters": 180.0,
+      "id": "LOC_INC_01",
+      "area_grid": "GRID_LOCAL_ALLEY",
+      "lat": 12.93695,
+      "lon": 77.62625,
+      "radius_meters": 160.0,
       "time_bucket": "night",
-      "category": "poor_lighting_and_harassment",
-      "severity": 3.6,
-      "count": 11,
-      "source": "Municipal_Public_Safety_Records",
-      "confidence": 85.0,
-      "last_updated": "2026-09-01T13:15:09.276133"
+      "category": "poor_lighting_and_hazard",
+      "severity": 3.5,
+      "count": 6,
+      "source": "Municipal_Safety_GIS",
+      "confidence": 80.0,
+      "last_updated": "2026-09-01T13:51:20.149263"
     }
   ]
 }

@@ -287,7 +287,8 @@ def set_custom_location(req: SetLocationRequest):
         "center": {"lat": req.lat, "lon": req.lon},
         "name": req.name,
         "total_pois": meta["total_pois"],
-        "total_segments": meta["total_segments"]
+        "total_segments": meta["total_segments"],
+        "pois": db.get_all_pois()
     }
 
 
