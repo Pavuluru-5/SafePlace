@@ -83,7 +83,7 @@ All 19 test cases validate spatial indexing, risk scoring, confidence decay, saf
 
 ---
 
-## 🎬 How to Perform the "Patchamama WOW Demo"
+## 🎬 Demo
 
 1. **Explore Indian City Presets**: Select from the top bar dropdown:
    - 🇮🇳 **Hyderabad (HITEC City / Madhapur)**: Includes Cyberabad Police Station, Medicover Hospital, Apollo Pharmacy 24/7, HITEC City Metro, and Guttala Begumpet alley shortcut.
