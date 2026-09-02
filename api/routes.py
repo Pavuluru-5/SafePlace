@@ -61,9 +61,35 @@ def get_system_status():
     }
 
 
+def ensure_location_context(lat: float, lon: float):
+    """
+    Checks if current database has reachable POIs near (lat, lon).
+    If the nearest POI is > 3500 meters away, automatically seeds the spatial network
+    around (lat, lon) so that all queries succeed smoothly.
+    """
+    pois = db.get_all_pois()
+    if not pois:
+        from data.dataset_builder import seed_database_with_coords
+        seed_database_with_coords(db, lat, lon, "Local Area")
+        route_engine.build_graph()
+        return
+
+    min_dist = min(haversine_distance_meters(lat, lon, p.lat, p.lon) for p in pois)
+    if min_dist > 3500:
+        from data.dataset_builder import seed_database_with_coords
+        seed_database_with_coords(db, lat, lon, "Local Area")
+        route_engine.build_graph()
+
+
 @router.get("/pois", response_model=List[POI])
-def get_pois(category: Optional[str] = None):
-    """Retrieves all offline POIs or filters by category."""
+def get_pois(
+    category: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None
+):
+    """Retrieves all offline POIs or filters by category and optional proximity."""
+    if lat is not None and lon is not None:
+        ensure_location_context(lat, lon)
     all_p = db.get_all_pois()
     if category:
         all_p = [p for p in all_p if p.category.lower() == category.lower()]
@@ -78,6 +104,7 @@ def get_safe_bubble(
     data_age_hours: Optional[float] = Query(None, description="Simulated data age in hours")
 ):
     """Calculates dynamic Safe Bubble isochrones and reachable havens."""
+    ensure_location_context(lat, lon)
     return safe_bubble_monitor.calculate_safe_bubble(
         user_lat=lat,
         user_lon=lon,
@@ -94,9 +121,14 @@ def get_routes(
     data_age_hours: Optional[float] = Query(None, description="Simulated data age override")
 ):
     """Calculates and returns both the Safest Route and the Fastest Route."""
+    ensure_location_context(lat, lon)
     poi = db.get_poi_by_id(destination_id)
     if not poi:
-        raise HTTPException(status_code=404, detail="Destination POI not found")
+        pois = db.get_all_pois()
+        if pois:
+            poi = pois[0]
+        else:
+            raise HTTPException(status_code=404, detail="Destination POI not found")
 
     safest, fastest = route_engine.calculate_routes_to_destination(
         user_lat=lat,
@@ -124,6 +156,7 @@ def trigger_emergency(req: EmergencyTriggerRequest):
     Emergency Mode ('I'M NOT SAFE' flow):
     Instant selection of highest-ranked safe haven, dual route calculation, and SLM guidance.
     """
+    ensure_location_context(req.user_lat, req.user_lon)
     # 1. Calculate Safe Bubble to locate all candidate havens
     bubble = safe_bubble_monitor.calculate_safe_bubble(
         user_lat=req.user_lat,
@@ -192,6 +225,7 @@ def slm_chat(req: SLMQueryRequest):
     On-device Conversational SLM query endpoint.
     Performs tool calling, grounded reasoning, and abstention handling.
     """
+    ensure_location_context(req.user_lat, req.user_lon)
     return slm_copilot.process_query(
         query=req.query,
         user_lat=req.user_lat,

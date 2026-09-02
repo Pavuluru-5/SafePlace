@@ -122,51 +122,77 @@ class OfflineDatabase:
 
             conn.commit()
 
-    def insert_poi(self, poi: POI):
+    def clear_all(self):
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute("DELETE FROM pois")
+            cursor.execute("DELETE FROM road_segments")
+            cursor.execute("DELETE FROM incident_aggregates")
+            conn.commit()
+
+    def insert_pois_batch(self, pois: List[POI]):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.executemany("""
                 INSERT OR REPLACE INTO pois 
                 (id, name, category, lat, lon, opening_hours, accessibility, 
                  verification_status, source, last_updated, confidence, phone, address, capacity_level)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                poi.id, poi.name, poi.category, poi.lat, poi.lon,
-                poi.opening_hours, poi.accessibility, poi.verification_status,
-                poi.source, poi.last_updated, poi.confidence, poi.phone, poi.address, poi.capacity_level
-            ))
+            """, [
+                (
+                    p.id, p.name, p.category, p.lat, p.lon,
+                    p.opening_hours, p.accessibility, p.verification_status,
+                    p.source, p.last_updated, p.confidence, p.phone, p.address, p.capacity_level
+                )
+                for p in pois
+            ])
             conn.commit()
 
-    def insert_road_segment(self, segment: RoadSegment):
+    def insert_segments_batch(self, segments: List[RoadSegment]):
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.executemany("""
                 INSERT OR REPLACE INTO road_segments
                 (id, u_node, v_node, name, road_type, geometry_json, length_meters, 
                  lighting, footpath, activity_proxy, cctv_available, incident_density, 
                  speed_kmh, last_updated, confidence)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                segment.id, segment.u_node, segment.v_node, segment.name, segment.road_type,
-                json.dumps(segment.geometry), segment.length_meters, segment.lighting,
-                1 if segment.footpath else 0, segment.activity_proxy, 1 if segment.cctv_available else 0,
-                segment.incident_density, segment.speed_kmh, segment.last_updated, segment.confidence
-            ))
+            """, [
+                (
+                    s.id, s.u_node, s.v_node, s.name, s.road_type,
+                    json.dumps(s.geometry), s.length_meters, s.lighting,
+                    1 if s.footpath else 0, s.activity_proxy, 1 if s.cctv_available else 0,
+                    s.incident_density, s.speed_kmh, s.last_updated, s.confidence
+                )
+                for s in segments
+            ])
             conn.commit()
 
-    def insert_incident_aggregate(self, incident: IncidentAggregate):
+    def insert_incidents_batch(self, incidents: List[IncidentAggregate]):
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.executemany("""
                 INSERT OR REPLACE INTO incident_aggregates
                 (id, area_grid, lat, lon, radius_meters, time_bucket, category, severity, count, source, confidence, last_updated)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                incident.id, incident.area_grid, incident.lat, incident.lon, incident.radius_meters,
-                incident.time_bucket, incident.category, incident.severity, incident.count,
-                incident.source, incident.confidence, incident.last_updated
-            ))
+            """, [
+                (
+                    i.id, i.area_grid, i.lat, i.lon, i.radius_meters,
+                    i.time_bucket, i.category, i.severity, i.count,
+                    i.source, i.confidence, i.last_updated
+                )
+                for i in incidents
+            ])
             conn.commit()
+
+    def insert_poi(self, poi: POI):
+        self.insert_pois_batch([poi])
+
+    def insert_road_segment(self, segment: RoadSegment):
+        self.insert_segments_batch([segment])
+
+    def insert_incident_aggregate(self, incident: IncidentAggregate):
+        self.insert_incidents_batch([incident])
 
     def get_all_pois(self) -> List[POI]:
         with self._get_connection() as conn:

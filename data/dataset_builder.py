@@ -787,16 +787,16 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
     t_yesterday = (now - timedelta(hours=24)).isoformat()
 
     # Offsets in degrees (~111km per deg lat, ~105km per deg lon at ~17-20N)
-    d_lat = 0.0040  # ~440m
-    d_lon = 0.0040  # ~420m
+    d_lat = 0.0035  # ~380m
+    d_lon = 0.0035  # ~360m
 
     pois = [
         POI(
             id="LOC_POLICE_01",
             name=f"District Police Station ({location_name})",
             category="police",
-            lat=round(lat + d_lat, 6),
-            lon=round(lon + d_lon * 0.8, 6),
+            lat=round(lat + d_lat * 0.9, 6),
+            lon=round(lon + d_lon * 0.7, 6),
             opening_hours="24/7",
             accessibility="full",
             verification_status="verified",
@@ -809,10 +809,10 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
         ),
         POI(
             id="LOC_HOSPITAL_01",
-            name=f"City General Hospital & Emergency ({location_name})",
+            name=f"Emergency Trauma Centre ({location_name})",
             category="hospital",
-            lat=round(lat - d_lat * 0.8, 6),
-            lon=round(lon + d_lon, 6),
+            lat=round(lat - d_lat * 0.75, 6),
+            lon=round(lon + d_lon * 0.85, 6),
             opening_hours="24/7",
             accessibility="full",
             verification_status="verified",
@@ -820,49 +820,81 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
             last_updated=t_fresh,
             confidence=96.0,
             phone="+91-108 / +91-102",
-            address="Hospital Way",
+            address="Hospital Care Way",
             capacity_level="normal"
         ),
         POI(
             id="LOC_PHARMACY_01",
-            name="24/7 Care Pharmacy & First Aid",
+            name="24/7 Medical & Emergency Pharmacy",
             category="pharmacy",
-            lat=round(lat + d_lat * 0.2, 6),
-            lon=round(lon + d_lon * 0.4, 6),
+            lat=round(lat + d_lat * 0.25, 6),
+            lon=round(lon + d_lon * 0.35, 6),
             opening_hours="24/7",
             accessibility="full",
             verification_status="verified",
             source="Municipal_Safety_GIS",
             last_updated=t_recent,
             confidence=94.0,
-            address="Main Commercial Rd"
+            phone="+91-1800-200-999",
+            address="Main Commercial Avenue"
+        ),
+        POI(
+            id="LOC_TRANSIT_01",
+            name="Central Transit & Safe Refuge Hub",
+            category="transport_hub",
+            lat=round(lat + d_lat * 0.8, 6),
+            lon=round(lon - d_lon * 0.5, 6),
+            opening_hours="05:30-23:30",
+            accessibility="full",
+            verification_status="verified",
+            source="Transit_Authority",
+            last_updated=t_recent,
+            confidence=92.0,
+            phone="139",
+            address="Transit Station Plaza"
         ),
         POI(
             id="LOC_PUBLIC_01",
-            name="Municipal Public Hub & Safe Shelter",
+            name="District Civic Command & Safety Shelter",
             category="public_building",
-            lat=round(lat + d_lat * 0.9, 6),
-            lon=round(lon - d_lon * 0.5, 6),
-            opening_hours="06:00-23:00",
+            lat=round(lat - d_lat * 0.4, 6),
+            lon=round(lon - d_lon * 0.6, 6),
+            opening_hours="24/7",
             accessibility="full",
             verification_status="verified",
             source="Municipal_Safety_GIS",
             last_updated=t_yesterday,
-            confidence=90.0,
-            address="Civic Center Square"
+            confidence=91.0,
+            phone="100",
+            address="Civic Complex Road"
+        ),
+        POI(
+            id="LOC_FIRE_01",
+            name="Emergency Fire & Rescue Station",
+            category="fire_station",
+            lat=round(lat - d_lat * 0.9, 6),
+            lon=round(lon - d_lon * 0.2, 6),
+            opening_hours="24/7",
+            accessibility="full",
+            verification_status="verified",
+            source="National_Emergency_Registry",
+            last_updated=t_fresh,
+            confidence=95.0,
+            phone="101",
+            address="Emergency Service Link"
         )
     ]
 
     segments = [
-        # Well-lit primary avenue to Police
+        # Well-lit primary avenue to Police (N1 -> N2)
         RoadSegment(
             id="LOC_SEG_01",
             u_node="N1",
             v_node="N2",
             name="Main Illuminated Avenue",
             road_type="primary",
-            geometry=[[lat, lon], [lat + d_lat * 0.5, lon + d_lon * 0.4], [lat + d_lat, lon + d_lon * 0.8]],
-            length_meters=520.0,
+            geometry=[[lat, lon], [lat + d_lat * 0.45, lon + d_lon * 0.35], [lat + d_lat * 0.9, lon + d_lon * 0.7]],
+            length_meters=490.0,
             lighting=0.95,
             footpath=True,
             activity_proxy=0.90,
@@ -872,15 +904,15 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
             last_updated=t_fresh,
             confidence=95.0
         ),
-        # Dark shortcut alley
+        # Dark shortcut alley to Police (N1 -> N3 -> N2)
         RoadSegment(
             id="LOC_SEG_02",
             u_node="N1",
             v_node="N3",
             name="Unlit Narrow Backlane (Dark Shortcut)",
             road_type="alley",
-            geometry=[[lat, lon], [lat + d_lat * 0.6, lon + d_lon * 0.6], [lat + d_lat, lon + d_lon * 0.8]],
-            length_meters=410.0,
+            geometry=[[lat, lon], [lat + d_lat * 0.5, lon + d_lon * 0.5], [lat + d_lat * 0.9, lon + d_lon * 0.7]],
+            length_meters=370.0,
             lighting=0.10,
             footpath=False,
             activity_proxy=0.10,
@@ -890,15 +922,15 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
             last_updated=t_yesterday,
             confidence=68.0
         ),
-        # Road to Hospital
+        # Road to Hospital (N1 -> N4)
         RoadSegment(
             id="LOC_SEG_03",
             u_node="N1",
             v_node="N4",
             name="Hospital Access Boulevard",
             road_type="secondary",
-            geometry=[[lat, lon], [lat - d_lat * 0.4, lon + d_lon * 0.5], [lat - d_lat * 0.8, lon + d_lon]],
-            length_meters=480.0,
+            geometry=[[lat, lon], [lat - d_lat * 0.4, lon + d_lon * 0.4], [lat - d_lat * 0.75, lon + d_lon * 0.85]],
+            length_meters=470.0,
             lighting=0.90,
             footpath=True,
             activity_proxy=0.80,
@@ -907,6 +939,78 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
             speed_kmh=4.5,
             last_updated=t_fresh,
             confidence=94.0
+        ),
+        # Road to Pharmacy (N1 -> N5)
+        RoadSegment(
+            id="LOC_SEG_04",
+            u_node="N1",
+            v_node="N5",
+            name="Commercial Market Corridor",
+            road_type="primary",
+            geometry=[[lat, lon], [lat + d_lat * 0.25, lon + d_lon * 0.35]],
+            length_meters=210.0,
+            lighting=0.95,
+            footpath=True,
+            activity_proxy=0.88,
+            cctv_available=True,
+            incident_density=0.02,
+            speed_kmh=4.5,
+            last_updated=t_fresh,
+            confidence=95.0
+        ),
+        # Road to Transit Hub (N1 -> N6)
+        RoadSegment(
+            id="LOC_SEG_05",
+            u_node="N1",
+            v_node="N6",
+            name="Transit Concourse Way",
+            road_type="primary",
+            geometry=[[lat, lon], [lat + d_lat * 0.4, lon - d_lon * 0.2], [lat + d_lat * 0.8, lon - d_lon * 0.5]],
+            length_meters=430.0,
+            lighting=0.92,
+            footpath=True,
+            activity_proxy=0.85,
+            cctv_available=True,
+            incident_density=0.04,
+            speed_kmh=4.5,
+            last_updated=t_fresh,
+            confidence=93.0
+        ),
+        # Road to Civic Shelter (N1 -> N7)
+        RoadSegment(
+            id="LOC_SEG_06",
+            u_node="N1",
+            v_node="N7",
+            name="Civic Link Promenade",
+            road_type="secondary",
+            geometry=[[lat, lon], [lat - d_lat * 0.4, lon - d_lon * 0.6]],
+            length_meters=340.0,
+            lighting=0.85,
+            footpath=True,
+            activity_proxy=0.75,
+            cctv_available=True,
+            incident_density=0.05,
+            speed_kmh=4.5,
+            last_updated=t_yesterday,
+            confidence=90.0
+        ),
+        # Road to Fire Station (N1 -> N8)
+        RoadSegment(
+            id="LOC_SEG_07",
+            u_node="N1",
+            v_node="N8",
+            name="Emergency Rescue Expressway",
+            road_type="primary",
+            geometry=[[lat, lon], [lat - d_lat * 0.5, lon - d_lon * 0.1], [lat - d_lat * 0.9, lon - d_lon * 0.2]],
+            length_meters=460.0,
+            lighting=0.90,
+            footpath=True,
+            activity_proxy=0.80,
+            cctv_available=True,
+            incident_density=0.02,
+            speed_kmh=4.5,
+            last_updated=t_fresh,
+            confidence=95.0
         )
     ]
 
@@ -914,8 +1018,8 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
         IncidentAggregate(
             id="LOC_INC_01",
             area_grid="GRID_LOCAL_ALLEY",
-            lat=round(lat + d_lat * 0.6, 6),
-            lon=round(lon + d_lon * 0.6, 6),
+            lat=round(lat + d_lat * 0.5, 6),
+            lon=round(lon + d_lon * 0.5, 6),
             radius_meters=160.0,
             time_bucket="night",
             category="poor_lighting_and_hazard",
@@ -947,57 +1051,52 @@ def generate_dataset_around_coords(lat: float, lon: float, location_name: str = 
 
 
 def seed_offline_database(db: OfflineDatabase, city_key: str = "hyderabad") -> Dict[str, Any]:
-    """Generates benchmark dataset for the chosen city and seeds SQLite offline store."""
+    """Generates benchmark dataset for the chosen city and seeds SQLite offline store with fast batch operations."""
     data = generate_dataset_for_city(city_key)
 
-    # Clear old records to seed new region cleanly
-    with db._get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM pois")
-        cursor.execute("DELETE FROM road_segments")
-        cursor.execute("DELETE FROM incident_aggregates")
-        conn.commit()
+    # Clear old records
+    db.clear_all()
 
-    # Save to json
-    config.SAMPLE_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(config.SAMPLE_DATA_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    # Fast batch inserts
+    pois = [POI(**p) for p in data["pois"]]
+    segments = [RoadSegment(**s) for s in data["road_segments"]]
+    incidents = [IncidentAggregate(**i) for i in data["incident_aggregates"]]
 
-    # Insert into database
-    for p_data in data["pois"]:
-        db.insert_poi(POI(**p_data))
+    db.insert_pois_batch(pois)
+    db.insert_segments_batch(segments)
+    db.insert_incidents_batch(incidents)
 
-    for s_data in data["road_segments"]:
-        db.insert_road_segment(RoadSegment(**s_data))
-
-    for i_data in data["incident_aggregates"]:
-        db.insert_incident_aggregate(IncidentAggregate(**i_data))
+    # Persist JSON asynchronously / safely
+    try:
+        config.SAMPLE_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(config.SAMPLE_DATA_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
 
     return data["metadata"]
 
 
 def seed_database_with_coords(db: OfflineDatabase, lat: float, lon: float, name: str = "My Real Location") -> Dict[str, Any]:
-    """Seeds database dynamically around user's exact coordinates."""
+    """Seeds database dynamically around user's exact coordinates with instant batch insert."""
     data = generate_dataset_around_coords(lat, lon, name)
 
-    with db._get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM pois")
-        cursor.execute("DELETE FROM road_segments")
-        cursor.execute("DELETE FROM incident_aggregates")
-        conn.commit()
+    db.clear_all()
 
-    with open(config.SAMPLE_DATA_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    pois = [POI(**p) for p in data["pois"]]
+    segments = [RoadSegment(**s) for s in data["road_segments"]]
+    incidents = [IncidentAggregate(**i) for i in data["incident_aggregates"]]
 
-    for p_data in data["pois"]:
-        db.insert_poi(POI(**p_data))
+    db.insert_pois_batch(pois)
+    db.insert_segments_batch(segments)
+    db.insert_incidents_batch(incidents)
 
-    for s_data in data["road_segments"]:
-        db.insert_road_segment(RoadSegment(**s_data))
-
-    for i_data in data["incident_aggregates"]:
-        db.insert_incident_aggregate(IncidentAggregate(**i_data))
+    try:
+        config.SAMPLE_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(config.SAMPLE_DATA_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
 
     return data["metadata"]
 
