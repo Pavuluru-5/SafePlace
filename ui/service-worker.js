@@ -1,10 +1,10 @@
 /**
- * SafePlace Service Worker — v5
+ * SafePlace Service Worker — v6
  * 100% Autonomous Offline PWA Engine with Cache-First Static Shell,
  * Offline SVG Tile Fallback, and Resilient API Interception.
  */
 
-const CACHE_NAME = 'safeplace-v5';
+const CACHE_NAME = 'safeplace-v6';
 const TILE_CACHE = 'safeplace-tiles-v1';
 
 // Static Shell Assets for 100% Offline Capability

@@ -382,7 +382,7 @@ def test_service_worker_and_offline_shell_invariants():
     with open("ui/service-worker.js", "r", encoding="utf-8") as f:
         sw = f.read()
 
-    assert "safeplace-v5" in sw
+    assert "safeplace-v6" in sw
     assert "safeplace-tiles-v1" in sw
     assert "OFFLINE_TILE_SVG" in sw
     assert "svg" in sw

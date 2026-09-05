@@ -221,6 +221,16 @@ body.dark-theme {
     background: var(--bg-card);
 }
 
+/* Default Active Mobile Panel: Map is visible immediately by default */
+.map-container, #panel-map {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    z-index: 15;
+    padding: 0;
+    background: transparent;
+}
+
 .sidebar-left {
     display: flex;
     flex-direction: column;
@@ -738,8 +748,8 @@ body.dark-theme {
 
 .map-controls-floating {
     position: absolute;
-    bottom: 20px;
-    left: 20px;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    left: 14px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -1020,7 +1030,7 @@ body.dark-theme {
 /* Mobile Floating Emergency Button on Map */
 .mobile-emergency-fab {
     position: absolute;
-    bottom: 16px;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
     right: 14px;
     z-index: 1000;
     padding: 10px 18px;
@@ -1190,6 +1200,11 @@ body.mobile-view-havens #havens-container .scrollable-pois {
         display: block !important;
     }
 
+    body:not(.is-mobile-layout) .map-controls-floating {
+        bottom: 20px !important;
+        left: 20px !important;
+    }
+
     body:not(.is-mobile-layout) .main-layout {
         display: grid;
         grid-template-columns: 360px 1fr 380px;
@@ -1276,21 +1291,23 @@ body.mobile-view-havens #havens-container .scrollable-pois {
     }
 
     .map-controls-floating {
-        bottom: 14px;
+        bottom: calc(66px + env(safe-area-inset-bottom, 0px));
         left: 8px;
         gap: 6px;
     }
 
     .map-float-btn {
-        padding: 6px 9px;
-        font-size: 0.72rem;
+        padding: 7px 10px;
+        font-size: 0.74rem;
+        min-height: 36px;
     }
 
     .mobile-emergency-fab {
-        bottom: 12px;
+        bottom: calc(66px + env(safe-area-inset-bottom, 0px));
         right: 8px;
         padding: 8px 14px;
         font-size: 0.8rem;
+        min-height: 38px;
     }
 
     .active-route-banner {

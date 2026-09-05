@@ -74,10 +74,10 @@ function showToast(message, icon = 'fa-location-dot', duration = 2200) {
 
 // Helper to check if mobile layout should be active
 function isMobileMode() {
-    return document.body.classList.contains('is-mobile-layout') ||
+    return window.innerWidth <= 1100 ||
            document.documentElement.classList.contains('is-mobile-device') ||
-           window.innerWidth <= 1100 ||
-           ('ontouchstart' in window && window.innerWidth <= 1366);
+           ('ontouchstart' in window) ||
+           navigator.maxTouchPoints > 0;
 }
 
 function applyResponsiveLayout() {
@@ -315,6 +315,11 @@ function initMap() {
         if (hint) hint.classList.add('fade-out');
         updateLocation(e.latlng.lat, e.latlng.lng, false, "Selected Location");
     });
+
+    // Ensure map tiles calculate correct dimensions on mobile load
+    setTimeout(() => {
+        if (map) map.invalidateSize(true);
+    }, 200);
 }
 
 function initEventListeners() {
@@ -874,7 +879,8 @@ function detectAndApplyUserLocation(isUserInitiated = false) {
                 if (resetBtn) {
                     resetBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> My Location';
                 }
-                alert("Location permission was not granted or signal is weak. SafePlace is using your last saved position. You can tap the map or select 'Pune' from the city list to set your location.");
+                showToast("Location permission unavailable. Tap map or drag pin to set spot.", "fa-location-dot", 4000);
+                addChatMessage("⚠️ **Location notice**: Device GPS was unavailable or denied. SafePlace is calibrated to your current position. You can tap anywhere on the map or select **Pune** from the top dropdown.", "ai");
             }
             updateLocation(state.userLat, state.userLon, false, "Saved Position");
         },
