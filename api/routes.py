@@ -118,7 +118,8 @@ def get_routes(
     lat: float = Query(37.7740, description="User start latitude"),
     lon: float = Query(-122.4200, description="User start longitude"),
     destination_id: str = Query(..., description="Target POI ID"),
-    data_age_hours: Optional[float] = Query(None, description="Simulated data age override")
+    data_age_hours: Optional[float] = Query(None, description="Simulated data age override"),
+    travel_mode: str = Query("walking", description="Travel mode: walking or vehicle")
 ):
     """Calculates and returns both the Safest Route and the Fastest Route."""
     ensure_location_context(lat, lon)
@@ -134,6 +135,7 @@ def get_routes(
         user_lat=lat,
         user_lon=lon,
         destination=poi,
+        travel_mode=travel_mode,
         age_hours_override=data_age_hours
     )
 
@@ -181,6 +183,7 @@ def trigger_emergency(req: EmergencyTriggerRequest):
         user_lat=req.user_lat,
         user_lon=req.user_lon,
         destination=best_poi,
+        travel_mode=req.travel_mode,
         age_hours_override=req.data_age_hours
     )
 

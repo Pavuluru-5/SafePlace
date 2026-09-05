@@ -87,24 +87,28 @@ class SafeRouteEngine:
         destination: POI,
         user_lat: float,
         user_lon: float,
-        is_safest: bool,
-        is_fastest: bool,
+        is_safest: bool = False,
+        is_fastest: bool = False,
+        travel_mode: str = "walking",
         age_hours_override: Optional[float] = None
     ) -> Route:
-        """Assembles route geometry, metrics, steps, and reasons from a node sequence."""
+        """Helper to construct rich Route object with navigation steps and safety metadata."""
+        is_vehicle = travel_mode.lower() in ["vehicle", "driving", "car"]
+        speed_kmh = 25.0 if is_vehicle else config.WALKING_SPEED_KMH
+        speed_factor = config.WALKING_SPEED_KMH / speed_kmh
+
         route_coords = [[user_lat, user_lon]]
         segments_in_path: List[RoadSegment] = []
+        lighting_scores: List[float] = []
+        safety_scores: List[float] = []
+        steps: List[RouteStep] = []
         total_distance = 0.0
         total_time_min = 0.0
-        lighting_scores = []
-        safety_scores = []
-        steps: List[RouteStep] = []
 
-        # Connect user start to first node
         first_coord = self._node_coords.get(node_path[0], (user_lat, user_lon))
         start_dist = haversine_distance_meters(user_lat, user_lon, first_coord[0], first_coord[1])
         total_distance += start_dist
-        total_time_min += (start_dist / (config.WALKING_SPEED_KMH * 1000.0 / 60.0))
+        total_time_min += (start_dist / (speed_kmh * 1000.0 / 60.0))
 
         for i in range(len(node_path) - 1):
             u, v = node_path[i], node_path[i + 1]
@@ -113,7 +117,8 @@ class SafeRouteEngine:
             if seg:
                 segments_in_path.append(seg)
                 total_distance += seg.length_meters
-                total_time_min += edge_data["travel_time_min"]
+                seg_time = edge_data["travel_time_min"] * speed_factor
+                total_time_min += seg_time
                 lighting_scores.append(seg.lighting)
                 safety_scores.append(edge_data["safety_score"])
 
@@ -128,7 +133,7 @@ class SafeRouteEngine:
                 steps.append(RouteStep(
                     instruction=f"Proceed along {seg.name} ({seg.road_type})",
                     distance_meters=round(seg.length_meters, 1),
-                    duration_seconds=round(edge_data["travel_time_min"] * 60, 0),
+                    duration_seconds=round(seg_time * 60, 0),
                     road_name=seg.name,
                     lighting_level=light_desc,
                     safety_indicator=safe_desc
@@ -138,13 +143,14 @@ class SafeRouteEngine:
         dest_coord = (destination.lat, destination.lon)
         end_dist = haversine_distance_meters(route_coords[-1][0], route_coords[-1][1], dest_coord[0], dest_coord[1])
         total_distance += end_dist
-        total_time_min += (end_dist / (config.WALKING_SPEED_KMH * 1000.0 / 60.0))
+        end_time = (end_dist / (speed_kmh * 1000.0 / 60.0))
+        total_time_min += end_time
         route_coords.append([dest_coord[0], dest_coord[1]])
 
         steps.append(RouteStep(
             instruction=f"Arrive safely at {destination.name} ({destination.category.replace('_', ' ').title()})",
             distance_meters=round(end_dist, 1),
-            duration_seconds=round((end_dist / (config.WALKING_SPEED_KMH * 1000.0 / 60.0)) * 60, 0),
+            duration_seconds=round(end_time * 60, 0),
             road_name=destination.name,
             lighting_level="Facility Perimeter Lighting",
             safety_indicator="Trusted Haven"
@@ -166,8 +172,10 @@ class SafeRouteEngine:
         if is_safest:
             if avg_lighting >= 75:
                 why.append(f"Follows primary well-illuminated thoroughfares ({avg_lighting:.0f}% lighting coverage).")
-            if any(s.footpath for s in segments_in_path):
+            if any(s.footpath for s in segments_in_path) and not is_vehicle:
                 why.append("Dedicated pedestrian footpaths throughout the path.")
+            if is_vehicle:
+                why.append("Wide vehicular road corridors with direct emergency vehicle access.")
             if destination.category in ["police", "hospital"]:
                 why.append(f"Direct route to verified 24/7 {destination.category.title()} haven.")
             why.append(f"Higher data confidence ({conf.score:.0f}%) with lowest cumulative hazard exposure.")
@@ -181,7 +189,7 @@ class SafeRouteEngine:
         return Route(
             id=route_id,
             name=route_name,
-            mode="walking",
+            mode="vehicle" if is_vehicle else "walking",
             destination_id=destination.id,
             destination_name=destination.name,
             destination_category=destination.category,
@@ -206,6 +214,7 @@ class SafeRouteEngine:
         user_lat: float,
         user_lon: float,
         destination: POI,
+        travel_mode: str = "walking",
         age_hours_override: Optional[float] = None
     ) -> Tuple[Route, Route]:
         """
@@ -234,11 +243,11 @@ class SafeRouteEngine:
 
         fastest_route = self._reconstruct_route_details(
             fast_path, destination, user_lat, user_lon,
-            is_safest=False, is_fastest=True, age_hours_override=age_hours_override
+            is_safest=False, is_fastest=True, travel_mode=travel_mode, age_hours_override=age_hours_override
         )
         safest_route = self._reconstruct_route_details(
             safe_path, destination, user_lat, user_lon,
-            is_safest=True, is_fastest=False, age_hours_override=age_hours_override
+            is_safest=True, is_fastest=False, travel_mode=travel_mode, age_hours_override=age_hours_override
         )
 
         return safest_route, fastest_route

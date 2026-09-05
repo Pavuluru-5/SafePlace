@@ -18,6 +18,210 @@ import config
 # -------------------------------------------------------------
 
 CITY_PRESETS = {
+    "pune": {
+        "name": "Pune (Camp / Shivajinagar / Kalyani Nagar)",
+        "country": "India 🇮🇳",
+        "center": {"lat": 18.5284, "lon": 73.8744},
+        "pois": [
+            {
+                "id": "PUN_POLICE_01",
+                "name": "Bund Garden Police Station",
+                "category": "police",
+                "lat": 18.5350,
+                "lon": 73.8820,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "Police_Department_Feed",
+                "confidence": 98.0,
+                "phone": "+91-20-2612-8877",
+                "address": "Bund Garden Rd, Camp, Pune"
+            },
+            {
+                "id": "PUN_POLICE_02",
+                "name": "Shivajinagar Police Station",
+                "category": "police",
+                "lat": 18.5310,
+                "lon": 73.8520,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "Police_Department_Feed",
+                "confidence": 97.0,
+                "phone": "+91-20-2553-6263",
+                "address": "Ganeshkhind Rd, Shivajinagar, Pune"
+            },
+            {
+                "id": "PUN_HOSPITAL_01",
+                "name": "Sassoon General Hospital & Trauma Centre",
+                "category": "hospital",
+                "lat": 18.5255,
+                "lon": 73.8710,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "Hospital_Authority_Direct",
+                "confidence": 99.0,
+                "phone": "+91-20-2612-8000",
+                "address": "Near Pune Railway Station, Jai Prakash Narayan Road"
+            },
+            {
+                "id": "PUN_HOSPITAL_02",
+                "name": "Ruby Hall Clinic Emergency Care",
+                "category": "hospital",
+                "lat": 18.5340,
+                "lon": 73.8780,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "Hospital_Authority_Direct",
+                "confidence": 98.0,
+                "phone": "+91-20-6645-5100",
+                "address": "40 Sassoon Road, Sangamvadi, Pune"
+            },
+            {
+                "id": "PUN_PHARMACY_01",
+                "name": "Apollo 24/7 Pharmacy (Station / Camp)",
+                "category": "pharmacy",
+                "lat": 18.5270,
+                "lon": 73.8730,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "Municipal_Safety_GIS",
+                "confidence": 95.0,
+                "phone": "+91-20-2605-1234",
+                "address": "Station Rd, Near Sadhu Vaswani Chowk"
+            },
+            {
+                "id": "PUN_TRANSIT_01",
+                "name": "Pune Junction Railway Station & Transit Hub",
+                "category": "transport_hub",
+                "lat": 18.5284,
+                "lon": 73.8744,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "OpenStreetMap_Verified",
+                "confidence": 96.0,
+                "phone": "+91-20-2612-6575",
+                "address": "Agarkar Nagar, Pune"
+            },
+            {
+                "id": "PUN_CIVIC_01",
+                "name": "Pune Police Commissionerate Command Centre",
+                "category": "public_building",
+                "lat": 18.5240,
+                "lon": 73.8720,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "Municipal_Safety_GIS",
+                "confidence": 98.0,
+                "phone": "+91-20-2612-2880",
+                "address": "Sadhu Vaswani Road, Camp, Pune"
+            },
+            {
+                "id": "PUN_FIRE_01",
+                "name": "Central Fire Brigade Station Pune",
+                "category": "fire_station",
+                "lat": 18.5260,
+                "lon": 73.8650,
+                "opening_hours": "24/7",
+                "accessibility": "full",
+                "verification_status": "verified",
+                "source": "National_Emergency_Registry",
+                "confidence": 97.0,
+                "phone": "+91-20-2645-1707",
+                "address": "Bhavani Peth / Timber Market Rd, Pune"
+            }
+        ],
+        "segments": [
+            {
+                "id": "PUN_SEG_01",
+                "u_node": "N1",
+                "v_node": "N2",
+                "name": "Station Road to Ruby Hall Promenade",
+                "road_type": "primary",
+                "geometry": [[18.5284, 73.8744], [18.5310, 73.8760], [18.5340, 73.8780]],
+                "length_meters": 620.0,
+                "lighting": 0.95,
+                "footpath": True,
+                "activity_proxy": 0.90,
+                "cctv_available": True,
+                "incident_density": 0.02
+            },
+            {
+                "id": "PUN_SEG_02",
+                "u_node": "N1",
+                "v_node": "N3",
+                "name": "Sassoon Road Emergency Corridor",
+                "road_type": "primary",
+                "geometry": [[18.5284, 73.8744], [18.5265, 73.8725], [18.5255, 73.8710]],
+                "length_meters": 410.0,
+                "lighting": 0.92,
+                "footpath": True,
+                "activity_proxy": 0.88,
+                "cctv_available": True,
+                "incident_density": 0.02
+            },
+            {
+                "id": "PUN_SEG_03",
+                "u_node": "N1",
+                "v_node": "N4",
+                "name": "Railway Goods Yard Dark Cut (Unlit Alley)",
+                "road_type": "alley",
+                "geometry": [[18.5284, 73.8744], [18.5295, 73.8755], [18.5315, 73.8765]],
+                "length_meters": 360.0,
+                "lighting": 0.12,
+                "footpath": False,
+                "activity_proxy": 0.10,
+                "cctv_available": False,
+                "incident_density": 0.70
+            },
+            {
+                "id": "PUN_SEG_04",
+                "u_node": "N4",
+                "v_node": "N2",
+                "name": "Backside Compound Link to Sangamvadi",
+                "road_type": "alley",
+                "geometry": [[18.5315, 73.8765], [18.5328, 73.8772], [18.5340, 73.8780]],
+                "length_meters": 290.0,
+                "lighting": 0.18,
+                "footpath": False,
+                "activity_proxy": 0.15,
+                "cctv_available": False,
+                "incident_density": 0.60
+            },
+            {
+                "id": "PUN_SEG_05",
+                "u_node": "N1",
+                "v_node": "N5",
+                "name": "Bund Garden Road Avenue",
+                "road_type": "secondary",
+                "geometry": [[18.5284, 73.8744], [18.5315, 73.8785], [18.5350, 73.8820]],
+                "length_meters": 950.0,
+                "lighting": 0.88,
+                "footpath": True,
+                "activity_proxy": 0.82,
+                "cctv_available": True,
+                "incident_density": 0.03
+            }
+        ],
+        "incidents": [
+            {
+                "id": "PUN_INC_01",
+                "area_grid": "GRID_PUN_RAILWAY_YARD",
+                "lat": 18.5295,
+                "lon": 73.8755,
+                "radius_meters": 170.0,
+                "time_bucket": "night",
+                "category": "poor_lighting_and_theft",
+                "severity": 3.5,
+                "count": 9
+            }
+        ]
+    },
     "hyderabad": {
         "name": "Hyderabad (HITEC City / Madhapur)",
         "country": "India 🇮🇳",
@@ -696,6 +900,8 @@ CITY_PRESETS = {
 
 def generate_dataset_for_city(city_key: str = "hyderabad") -> Dict[str, Any]:
     """Generates benchmark dataset for a specific city preset."""
+    if city_key.lower() == "pune" and "pune" not in CITY_PRESETS:
+        return generate_dataset_around_coords(18.5284, 73.8744, "Pune (Camp / Shivajinagar / Kalyani Nagar)")
     preset = CITY_PRESETS.get(city_key.lower(), CITY_PRESETS["hyderabad"])
     now = datetime.now()
     t_fresh = now.isoformat()

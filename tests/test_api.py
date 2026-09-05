@@ -24,8 +24,9 @@ def test_api_cities(client):
     res = client.get("/api/cities")
     assert res.status_code == 200
     cities = res.json()
-    assert len(cities) >= 4
+    assert len(cities) >= 5
     city_keys = [c["key"] for c in cities]
+    assert "pune" in city_keys
     assert "hyderabad" in city_keys
     assert "bangalore" in city_keys
 

@@ -25,6 +25,9 @@ const state = {
         fastest: null
     },
     userMarker: null,
+    accuracyCircle: null,
+    travelMode: 'walk', // 'walk' or 'vehicle'
+    googleMapsMode: 'walk',
     isGpsLocked: false,
     activeTab: 'map',
     pendingRouteBounds: null
@@ -349,12 +352,48 @@ function initEventListeners() {
         });
     }
 
-    // Reset Location Button
+    // "My Location" Floating Map Button — actively queries live device GPS
     const resetBtn = document.getElementById('reset-loc-btn');
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
-            map.setView([state.userLat, state.userLon], 15);
-            showToast("Centered on Your Location", "fa-crosshairs");
+            detectAndApplyUserLocation(true);
+        });
+    }
+
+    // Travel Mode Tabs (Walk vs Vehicle)
+    const modeWalkBtn = document.getElementById('mode-walk-btn');
+    const modeVehBtn = document.getElementById('mode-vehicle-btn');
+    const openGmapsViewBtn = document.getElementById('open-gmaps-view-btn');
+
+    if (modeWalkBtn) {
+        modeWalkBtn.addEventListener('click', () => {
+            state.travelMode = 'walk';
+            modeWalkBtn.classList.add('active');
+            if (modeVehBtn) modeVehBtn.classList.remove('active');
+            renderRouteMetrics();
+            if (state.selectedPoi) {
+                selectPoiById(state.selectedPoi.id);
+            }
+            showToast("Walking Mode (~4.5 km/h)", "fa-person-walking");
+        });
+    }
+
+    if (modeVehBtn) {
+        modeVehBtn.addEventListener('click', () => {
+            state.travelMode = 'vehicle';
+            modeVehBtn.classList.add('active');
+            if (modeWalkBtn) modeWalkBtn.classList.remove('active');
+            renderRouteMetrics();
+            if (state.selectedPoi) {
+                selectPoiById(state.selectedPoi.id);
+            }
+            showToast("Vehicle Mode (~27 km/h City Speed)", "fa-car");
+        });
+    }
+
+    if (openGmapsViewBtn) {
+        openGmapsViewBtn.addEventListener('click', () => {
+            window.openGoogleMapsForActivePoi();
         });
     }
 
@@ -542,11 +581,15 @@ function handleLiveMovement(lat, lon) {
     if (elB15) elB15.textContent = b15;
 
     // 4. Update distance indicators in POI cards
+    const isVehicle = state.travelMode === 'vehicle';
     enriched.forEach(p => {
         const badge = document.querySelector(`.poi-dist-badge[data-poi-id="${p.id}"]`);
         if (badge) {
             const distStr = p.distance_meters < 1000 ? `${p.distance_meters}m` : `${(p.distance_meters / 1000).toFixed(1)}km`;
-            badge.innerHTML = `<i class="fa-solid fa-person-walking"></i> ${distStr} (${p.walk_minutes} min)`;
+            const etaMin = isVehicle ? Math.max(1, Math.round(p.distance_meters / 450)) : p.walk_minutes;
+            const modeIcon = isVehicle ? 'fa-car' : 'fa-person-walking';
+            const modeLabel = isVehicle ? 'drive' : 'walk';
+            badge.innerHTML = `<i class="fa-solid ${modeIcon}"></i> ${distStr} (${etaMin} min ${modeLabel})`;
         }
     });
 
@@ -558,16 +601,21 @@ function handleLiveMovement(lat, lon) {
 
     if (targetPoi) {
         const distM = calcHaversineMeters(lat, lon, targetPoi.lat, targetPoi.lon);
-        const walkM = Math.max(1, Math.round(distM / 75));
+        const etaM = isVehicle ? Math.max(1, Math.round(distM / 450)) : Math.max(1, Math.round(distM / 75));
+        const modeLabel = isVehicle ? 'drive' : 'walk';
         const distStr = distM < 1000 ? `${distM}m` : `${(distM / 1000).toFixed(1)}km`;
 
         // Update Floating Map Route Banner
         const banner = document.getElementById('active-route-banner');
         const bName = document.getElementById('banner-dest-name');
         const bMeta = document.getElementById('banner-dest-meta');
+        const bIcon = document.getElementById('banner-mode-icon');
         if (banner && bName && bMeta) {
             bName.textContent = targetPoi.name;
-            bMeta.textContent = `${distStr} • ~${walkM} min walk (Illuminated Safe Corridor)`;
+            bMeta.textContent = `${distStr} • ~${etaM} min ${modeLabel} (Illuminated Safe Corridor)`;
+            if (bIcon) {
+                bIcon.className = isVehicle ? 'fa-solid fa-car text-cyan' : 'fa-solid fa-person-walking text-cyan';
+            }
             banner.style.display = 'flex';
         }
 
@@ -584,7 +632,7 @@ function handleLiveMovement(lat, lon) {
         const elSafety = document.getElementById('route-safety');
         const elLighting = document.getElementById('route-lighting');
         if (elDist) elDist.textContent = `${distM} m`;
-        if (elTime) elTime.textContent = `${walkM} min`;
+        if (elTime) elTime.textContent = `${etaM} min`;
         if (elSafety) elSafety.textContent = `${offlineRoute.safest_route.safety_score}/100`;
         if (elLighting) elLighting.textContent = `${offlineRoute.safest_route.lighting_percentage}%`;
     }
@@ -740,6 +788,7 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
 function detectAndApplyUserLocation(isUserInitiated = false) {
     const gpsStatusEl = document.getElementById('gps-status');
     const realGpsBtn = document.getElementById('real-gps-btn');
+    const resetBtn = document.getElementById('reset-loc-btn');
 
     if (!("geolocation" in navigator)) {
         if (isUserInitiated) {
@@ -749,15 +798,20 @@ function detectAndApplyUserLocation(isUserInitiated = false) {
         return;
     }
 
-    if (realGpsBtn && isUserInitiated) {
-        realGpsBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span class="btn-text">Locating...</span>';
+    if (isUserInitiated) {
+        if (realGpsBtn) {
+            realGpsBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span class="btn-text">Locating...</span>';
+        }
+        if (resetBtn) {
+            resetBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Locating...';
+        }
     }
 
     navigator.geolocation.getCurrentPosition(
         (position) => {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
-            const accuracy = position.coords.accuracy || 15;
+            const accuracy = position.coords.accuracy || 20;
 
             if (gpsStatusEl) {
                 gpsStatusEl.innerHTML = `<i class="fa-solid fa-location-crosshairs text-green"></i> GPS Live (±${Math.round(accuracy)}m)`;
@@ -770,12 +824,39 @@ function detectAndApplyUserLocation(isUserInitiated = false) {
                 }, 2200);
             }
 
+            if (resetBtn) {
+                resetBtn.innerHTML = '<i class="fa-solid fa-circle-check text-green"></i> Located!';
+                setTimeout(() => {
+                    resetBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> My Location';
+                }, 2200);
+            }
+
             if (map) {
                 map.setView([lat, lon], 15);
+                
+                // Draw or update GPS Accuracy circle
+                if (state.accuracyCircle) {
+                    map.removeLayer(state.accuracyCircle);
+                }
+                state.accuracyCircle = L.circle([lat, lon], {
+                    radius: Math.max(accuracy, 25),
+                    color: '#06b6d4',
+                    fillColor: '#06b6d4',
+                    fillOpacity: 0.12,
+                    weight: 1.5,
+                    dashArray: '4, 4'
+                }).addTo(map);
             }
 
             updateLocation(lat, lon, false, "Live GPS Location");
-            addChatMessage(`📍 **GPS Position Locked**: Centered on (**${lat.toFixed(4)}, ${lon.toFixed(4)}**). Dynamic Safe Bubble and 24/7 verified refuge havens generated around your real location.`, 'ai');
+            
+            if (accuracy > 150) {
+                showToast(`Wi-Fi/IP estimate (±${Math.round(accuracy)}m). Drag blue pin or tap map for exact spot!`, 'fa-location-crosshairs', 4500);
+            } else {
+                showToast(`📍 GPS Locked (±${Math.round(accuracy)}m)`, 'fa-crosshairs', 2500);
+            }
+
+            addChatMessage(`📍 **GPS Position Locked**: Centered on (**${lat.toFixed(4)}, ${lon.toFixed(4)}** ±${Math.round(accuracy)}m). Safe Bubble and verified havens calibrated. If using desktop Wi-Fi, you can drag the blue pin to your exact building.`, 'ai');
             
             if (isMobileMode()) {
                 switchMobileView('map');
@@ -783,16 +864,21 @@ function detectAndApplyUserLocation(isUserInitiated = false) {
         },
         (error) => {
             console.warn('[SafePlace] Geolocation notice:', error.message);
-            if (realGpsBtn && isUserInitiated) {
-                realGpsBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-yellow"></i> <span class="btn-text">GPS Blocked</span>';
-                setTimeout(() => {
-                    realGpsBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> <span class="btn-text">Locate Me</span>';
-                }, 2500);
-                alert("Location permission was not granted or GPS signal is weak. SafePlace is defaulting to current position.");
+            if (isUserInitiated) {
+                if (realGpsBtn) {
+                    realGpsBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-yellow"></i> <span class="btn-text">GPS Blocked</span>';
+                    setTimeout(() => {
+                        realGpsBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> <span class="btn-text">Locate Me</span>';
+                    }, 2500);
+                }
+                if (resetBtn) {
+                    resetBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> My Location';
+                }
+                alert("Location permission was not granted or signal is weak. SafePlace is using your last saved position. You can tap the map or select 'Pune' from the city list to set your location.");
             }
             updateLocation(state.userLat, state.userLon, false, "Saved Position");
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
 }
 
@@ -883,11 +969,14 @@ function renderPoiMarkers(pois) {
                     <span style="font-weight:600; color:${color};">${(p.category || '').replace('_', ' ').toUpperCase()}</span> • ${p.opening_hours}
                 </div>
                 <div style="font-size:11px; color:#64748b; margin-bottom:8px;">
-                    📍 <strong>${dist}m</strong> away (~${walkMin} min walk)
+                    📍 <strong>${dist}m</strong> away • ~${walkMin}m walk / ~${Math.max(1, Math.round(dist / 450))}m drive
                 </div>
-                <div>
-                    <button onclick="window.selectPoiById('${p.id}')" style="background:#3b82f6; color:white; border:none; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; width:100%; box-shadow:0 2px 6px rgba(59,130,246,0.4);">
-                        Navigate Here
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <button onclick="window.selectPoiById('${p.id}')" style="background:#2563eb; color:white; border:none; border-radius:6px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer; width:100%; box-shadow:0 2px 6px rgba(37,99,235,0.4); display:flex; align-items:center; justify-content:center; gap:6px;">
+                        <i class="fa-solid fa-route"></i> Safe Illuminated Route
+                    </button>
+                    <button onclick="window.openGoogleMapsModal('${p.id}')" style="background:#0f172a; color:#38bdf8; border:1px solid #0284c7; border-radius:6px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer; width:100%; box-shadow:0 2px 6px rgba(2,132,199,0.25); display:flex; align-items:center; justify-content:center; gap:6px;">
+                        <i class="fa-brands fa-google text-blue"></i> Google Maps (Walk / Vehicle)
                     </button>
                 </div>
             </div>
@@ -909,20 +998,26 @@ window.selectPoiById = function(poiId) {
     renderPoiList(document.getElementById('poi-filter')?.value || '');
 
     const dist = calcHaversineMeters(state.userLat, state.userLon, poi.lat, poi.lon);
-    const walkMin = Math.max(1, Math.round(dist / 75));
+    const isVehicle = state.travelMode === 'vehicle';
+    const etaMin = isVehicle ? Math.max(1, Math.round(dist / 450)) : Math.max(1, Math.round(dist / 75));
+    const modeStr = isVehicle ? 'drive' : 'walk';
     const distStr = dist < 1000 ? `${dist}m` : `${(dist / 1000).toFixed(1)}km`;
 
     // Update Floating Map Route Banner
     const banner = document.getElementById('active-route-banner');
     const bName = document.getElementById('banner-dest-name');
     const bMeta = document.getElementById('banner-dest-meta');
+    const bIcon = document.getElementById('banner-mode-icon');
     if (banner && bName && bMeta) {
         bName.textContent = poi.name;
-        bMeta.textContent = `${distStr} • ~${walkMin} min walk (Illuminated Route)`;
+        bMeta.textContent = `${distStr} • ~${etaMin} min ${modeStr} (Illuminated Route)`;
+        if (bIcon) {
+            bIcon.className = isVehicle ? 'fa-solid fa-car text-cyan' : 'fa-solid fa-person-walking text-cyan';
+        }
         banner.style.display = 'flex';
     }
 
-    showToast(`Navigating to ${poi.name} • ${distStr} (~${walkMin} min walk)`, 'fa-route', 2500);
+    showToast(`Navigating to ${poi.name} • ${distStr} (~${etaMin} min ${modeStr})`, 'fa-route', 2500);
 
     // If on havens tab or copilot on mobile, switch to map
     if (isMobileMode() && !document.body.classList.contains('mobile-view-map')) {
@@ -938,6 +1033,123 @@ window.selectPoiById = function(poiId) {
                 }
             } catch (e) {}
         }, 160);
+    }
+};
+
+// Google Maps In-App Viewer and Navigation Controller
+window.openGoogleMapsModal = function(poiId = null, mode = null) {
+    const poi = (poiId && state.pois) ? state.pois.find(p => p.id === poiId) : (state.selectedPoi || state.pois[0]);
+    if (!poi) {
+        showToast("Please select a destination haven first", "fa-circle-info");
+        return;
+    }
+
+    state.selectedPoi = poi;
+    const currentMode = mode || state.travelMode || 'walk';
+    state.googleMapsMode = currentMode;
+
+    const modal = document.getElementById('gmaps-nav-modal');
+    const titleEl = document.getElementById('gmaps-dest-title');
+    const subtitleEl = document.getElementById('gmaps-dest-subtitle');
+    const iframe = document.getElementById('gmaps-iframe');
+    const loader = document.getElementById('gmaps-loading-spinner');
+    const extLink = document.getElementById('gmaps-external-link');
+
+    const dist = calcHaversineMeters(state.userLat, state.userLon, poi.lat, poi.lon);
+    const distStr = dist < 1000 ? `${dist}m` : `${(dist / 1000).toFixed(1)}km`;
+    const walkMin = Math.max(1, Math.round(dist / 75));
+    const vehMin = Math.max(1, Math.round(dist / 450));
+    const etaStr = currentMode === 'vehicle' ? `~${vehMin} min drive` : `~${walkMin} min walk`;
+
+    if (titleEl) titleEl.textContent = poi.name;
+    if (subtitleEl) subtitleEl.textContent = `From Current Location • ${distStr} (${etaStr})`;
+
+    // Update Mode Pills in Modal
+    const pillWalk = document.getElementById('gmaps-pill-walk');
+    const pillVeh = document.getElementById('gmaps-pill-vehicle');
+    if (pillWalk) pillWalk.classList.toggle('active', currentMode === 'walk');
+    if (pillVeh) pillVeh.classList.toggle('active', currentMode === 'vehicle');
+
+    // Handle Online vs Offline Google Maps Loading
+    if (!navigator.onLine) {
+        if (loader) {
+            loader.innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:20px; text-align:center;">
+                    <i class="fa-solid fa-cloud-slash text-amber" style="font-size:2.2rem; margin-bottom:4px;"></i>
+                    <span style="color:#f59e0b; font-weight:700; font-size:15px;">Offline Mode Active</span>
+                    <span style="color:#94a3b8; font-size:12px; max-width:290px; line-height:1.4;">
+                        Google Maps web view requires an internet connection.
+                    </span>
+                    <span style="color:#38bdf8; font-size:12px; max-width:290px; line-height:1.4; margin-top:4px;">
+                        💡 <b>Offline Voice Navigation:</b> Tap <b>"Open Google Maps App"</b> if you have pre-downloaded offline areas in Pune, or close to use <b>SafePlace's built-in offline illuminated route</b>.
+                    </span>
+                </div>
+            `;
+            loader.style.display = 'flex';
+        }
+        if (iframe) {
+            iframe.src = '';
+        }
+    } else {
+        if (loader) {
+            loader.innerHTML = `
+                <i class="fa-solid fa-spinner fa-spin text-cyan"></i>
+                <span>Connecting to Google Maps Directions...</span>
+            `;
+            loader.style.display = 'flex';
+        }
+        // Google Maps Direction URL (dirflg=w for walking, dirflg=d for driving/vehicle)
+        const dirFlag = currentMode === 'vehicle' ? 'd' : 'w';
+        const embedUrl = `https://maps.google.com/maps?saddr=${state.userLat},${state.userLon}&daddr=${poi.lat},${poi.lon}&dirflg=${dirFlag}&output=embed`;
+        if (iframe) {
+            iframe.src = embedUrl;
+        }
+    }
+
+    // External App Deep Link for Turn-by-Turn GPS Voice Navigation
+    const travelMode = currentMode === 'vehicle' ? 'driving' : 'walking';
+    const externalUrl = `https://www.google.com/maps/dir/?api=1&origin=${state.userLat},${state.userLon}&destination=${poi.lat},${poi.lon}&travelmode=${travelMode}`;
+    if (extLink) {
+        extLink.href = externalUrl;
+    }
+
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+};
+
+window.closeGoogleMapsModal = function() {
+    const modal = document.getElementById('gmaps-nav-modal');
+    const iframe = document.getElementById('gmaps-iframe');
+    if (modal) modal.style.display = 'none';
+    if (iframe) iframe.src = '';
+};
+
+window.setGoogleMapsMode = function(mode) {
+    state.travelMode = mode;
+    state.googleMapsMode = mode;
+
+    // Sync Route Navigation panel buttons as well
+    const modeWalkBtn = document.getElementById('mode-walk-btn');
+    const modeVehBtn = document.getElementById('mode-vehicle-btn');
+    if (modeWalkBtn) modeWalkBtn.classList.toggle('active', mode === 'walk');
+    if (modeVehBtn) modeVehBtn.classList.toggle('active', mode === 'vehicle');
+
+    const targetPoi = state.selectedPoi || (state.pois && state.pois.length > 0 ? state.pois[0] : null);
+    if (targetPoi) {
+        state.selectedPoi = targetPoi;
+        window.openGoogleMapsModal(targetPoi.id, mode);
+    }
+    renderRouteMetrics();
+};
+
+window.openGoogleMapsForActivePoi = function() {
+    if (state.selectedPoi) {
+        window.openGoogleMapsModal(state.selectedPoi.id, state.travelMode || 'walk');
+    } else if (state.pois && state.pois.length > 0) {
+        window.openGoogleMapsModal(state.pois[0].id, state.travelMode || 'walk');
+    } else {
+        showToast("Select a Haven first to view on Google Maps", "fa-route");
     }
 };
 
@@ -983,6 +1195,10 @@ function renderPoiList(filterCat = '') {
         item.className = `poi-item ${isSelected ? 'active' : ''}`;
         
         const distStr = p.distance_meters < 1000 ? `${p.distance_meters}m` : `${(p.distance_meters / 1000).toFixed(1)}km`;
+        const isVehicle = state.travelMode === 'vehicle';
+        const etaMin = isVehicle ? Math.max(1, Math.round(p.distance_meters / 450)) : p.walk_minutes;
+        const modeIcon = isVehicle ? 'fa-car' : 'fa-person-walking';
+        const modeLabel = isVehicle ? 'drive' : 'walk';
 
         item.innerHTML = `
             <div class="poi-info">
@@ -990,12 +1206,15 @@ function renderPoiList(filterCat = '') {
                 <div style="flex:1; min-width:0;">
                     <div class="poi-title" title="${p.name}">${p.name}</div>
                     <div class="poi-meta">
-                        <span class="poi-dist-badge" data-poi-id="${p.id}"><i class="fa-solid fa-person-walking"></i> ${distStr} (${p.walk_minutes} min)</span>
+                        <span class="poi-dist-badge" data-poi-id="${p.id}"><i class="fa-solid ${modeIcon}"></i> ${distStr} (${etaMin} min ${modeLabel})</span>
                         <span class="poi-open-badge">${p.opening_hours}</span>
                     </div>
                 </div>
             </div>
-            <button class="btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline'}" title="Navigate"><i class="fa-solid fa-chevron-right"></i></button>
+            <div style="display:flex; align-items:center; gap:4px;">
+                <button class="btn btn-sm btn-outline" title="Open in Google Maps" onclick="event.stopPropagation(); window.openGoogleMapsModal('${p.id}');"><i class="fa-brands fa-google text-blue"></i></button>
+                <button class="btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline'}" title="Navigate"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
         `;
         item.addEventListener('click', () => {
             selectPoiById(p.id);
@@ -1094,14 +1313,20 @@ function calculateAndDrawRoutes(destinationId) {
 
     // Update Floating Map Route Banner
     const dist = calcHaversineMeters(state.userLat, state.userLon, poi.lat, poi.lon);
-    const walkMin = Math.max(1, Math.round(dist / 75));
+    const isVehicle = state.travelMode === 'vehicle';
+    const etaMin = isVehicle ? Math.max(1, Math.round(dist / 450)) : Math.max(1, Math.round(dist / 75));
+    const modeLabel = isVehicle ? 'drive' : 'walk';
     const distStr = dist < 1000 ? `${dist}m` : `${(dist / 1000).toFixed(1)}km`;
     const banner = document.getElementById('active-route-banner');
     const bName = document.getElementById('banner-dest-name');
     const bMeta = document.getElementById('banner-dest-meta');
+    const bIcon = document.getElementById('banner-mode-icon');
     if (banner && bName && bMeta) {
         bName.textContent = poi.name;
-        bMeta.textContent = `${distStr} • ~${walkMin} min walk (Illuminated Route)`;
+        bMeta.textContent = `${distStr} • ~${etaMin} min ${modeLabel} (Illuminated Route)`;
+        if (bIcon) {
+            bIcon.className = isVehicle ? 'fa-solid fa-car text-cyan' : 'fa-solid fa-person-walking text-cyan';
+        }
         banner.style.display = 'flex';
     }
 
@@ -1183,10 +1408,16 @@ function renderRouteMetrics() {
 
     if (!r) return;
 
+    const isVehicle = state.travelMode === 'vehicle';
+    const distMeters = r.distance_meters;
+    const durationMin = isVehicle 
+        ? Math.max(1, Math.round(distMeters / 450)) 
+        : (r.duration_minutes || Math.max(1, Math.round(distMeters / 75)));
+
     document.getElementById('route-safety').textContent = `${r.safety_score}/100`;
     document.getElementById('route-lighting').textContent = `${r.lighting_percentage}%`;
-    document.getElementById('route-time').textContent = `${r.duration_minutes} min`;
-    document.getElementById('route-dist').textContent = `${r.distance_meters} m`;
+    document.getElementById('route-time').textContent = `${durationMin} min`;
+    document.getElementById('route-dist').textContent = `${distMeters} m`;
 
     const whyList = document.getElementById('route-why-list');
     if (whyList) {
@@ -1456,6 +1687,20 @@ function addChatMessage(content, sender, isAbstained = false, suggestedPoi = nul
 // -------------------------------------------------------------
 
 const OFFLINE_CITY_PRESETS = {
+    pune: {
+        name: "Pune (Camp / Shivajinagar / Kalyani Nagar)",
+        center: { lat: 18.5284, lon: 73.8744 },
+        pois: [
+            { id: "PUN_POLICE_01", name: "Bund Garden Police Station", category: "police", lat: 18.5350, lon: 73.8820, opening_hours: "24/7", accessibility: "full", phone: "+91-20-2612-8877" },
+            { id: "PUN_POLICE_02", name: "Shivajinagar Police Station", category: "police", lat: 18.5310, lon: 73.8520, opening_hours: "24/7", accessibility: "full", phone: "+91-20-2553-6263" },
+            { id: "PUN_HOSPITAL_01", name: "Sassoon General Hospital & Trauma Centre", category: "hospital", lat: 18.5255, lon: 73.8710, opening_hours: "24/7", accessibility: "full", phone: "+91-20-2612-8000" },
+            { id: "PUN_HOSPITAL_02", name: "Ruby Hall Clinic Emergency Care", category: "hospital", lat: 18.5340, lon: 73.8780, opening_hours: "24/7", accessibility: "full", phone: "+91-20-6645-5100" },
+            { id: "PUN_PHARMACY_01", name: "Apollo 24/7 Pharmacy (Station / Camp)", category: "pharmacy", lat: 18.5270, lon: 73.8730, opening_hours: "24/7", accessibility: "full", phone: "+91-20-2605-1234" },
+            { id: "PUN_TRANSIT_01", name: "Pune Junction Railway Station & Transit Hub", category: "transport_hub", lat: 18.5284, lon: 73.8744, opening_hours: "24/7", accessibility: "full", phone: "+91-20-2612-6575" },
+            { id: "PUN_CIVIC_01", name: "Pune Police Commissionerate Command Centre", category: "public_building", lat: 18.5240, lon: 73.8720, opening_hours: "24/7", accessibility: "full", phone: "+91-20-2612-2880" },
+            { id: "PUN_FIRE_01", name: "Central Fire Brigade Station Pune", category: "fire_station", lat: 18.5260, lon: 73.8650, opening_hours: "24/7", accessibility: "full", phone: "+91-20-2645-1707" }
+        ]
+    },
     hyderabad: {
         name: "Hyderabad (HITEC City / Madhapur)",
         center: { lat: 17.4435, lon: 78.3772 },
@@ -1654,7 +1899,11 @@ function computeClientOfflineBubble(lat, lon, pois) {
 
 function generateClientOfflineRoute(userLat, userLon, destination) {
     const distMeters = Math.max(80, calcHaversineMeters(userLat, userLon, destination.lat, destination.lon));
-    const durMins = Math.max(1.0, +(distMeters / 75.0).toFixed(1)); // ~4.5 km/h walking speed
+    const isVehicle = state.travelMode === 'vehicle';
+    const durMins = isVehicle 
+        ? Math.max(1.0, +(distMeters / 450.0).toFixed(1))  // ~27 km/h vehicle speed
+        : Math.max(1.0, +(distMeters / 75.0).toFixed(1));   // ~4.5 km/h walking speed
+    const modeLabel = isVehicle ? "vehicle" : "walking";
 
     // Waypoints along simulated illuminated grid
     const midLat = userLat + (destination.lat - userLat) * 0.48;
@@ -1669,7 +1918,7 @@ function generateClientOfflineRoute(userLat, userLon, destination) {
     const safest = {
         id: `route_safe_${destination.id}`,
         name: `Safest Route to ${destination.name}`,
-        mode: "walking",
+        mode: modeLabel,
         destination_id: destination.id,
         destination_name: destination.name,
         destination_category: destination.category,
@@ -1679,20 +1928,34 @@ function generateClientOfflineRoute(userLat, userLon, destination) {
         safety_score: 96.0,
         lighting_percentage: 95.0,
         why_recommended: [
-            "Follows primary illuminated roads (95% street lighting coverage).",
-            "Dedicated pedestrian walkways throughout.",
+            isVehicle 
+                ? "Follows major illuminated multi-lane arteries with active surveillance."
+                : "Follows primary illuminated roads (95% street lighting coverage).",
+            isVehicle
+                ? "Direct vehicular access route to verified 24/7 haven."
+                : "Dedicated pedestrian walkways throughout.",
             "Verified offline spatial safety score: 96/100."
         ],
         steps: [
-            { instruction: "Proceed along Main Illuminated Avenue", distance_meters: Math.round(distMeters * 0.6), duration_seconds: Math.round(durMins * 36), lighting_level: "Well-lit (Active Streetlights)" },
-            { instruction: `Arrive safely at ${destination.name}`, distance_meters: Math.round(distMeters * 0.4), duration_seconds: Math.round(durMins * 24), lighting_level: "Facility Perimeter Lighting" }
+            { 
+                instruction: isVehicle ? "Proceed along Main Illuminated Boulevard" : "Proceed along Main Illuminated Avenue", 
+                distance_meters: Math.round(distMeters * 0.6), 
+                duration_seconds: Math.round(durMins * 36), 
+                lighting_level: "Well-lit (Active Streetlights)" 
+            },
+            { 
+                instruction: `Arrive safely at ${destination.name}`, 
+                distance_meters: Math.round(distMeters * 0.4), 
+                duration_seconds: Math.round(durMins * 24), 
+                lighting_level: "Facility Perimeter Lighting" 
+            }
         ]
     };
 
     const fastest = {
         id: `route_fast_${destination.id}`,
         name: `Fastest Route to ${destination.name}`,
-        mode: "walking",
+        mode: modeLabel,
         destination_id: destination.id,
         destination_name: destination.name,
         destination_category: destination.category,
@@ -1702,7 +1965,7 @@ function generateClientOfflineRoute(userLat, userLon, destination) {
         safety_score: 55.0,
         lighting_percentage: 25.0,
         why_recommended: [
-            "Fastest route: saves ~1-2 min by cutting through secondary paths.",
+            `Fastest route: saves ~${Math.max(0.5, +(durMins * 0.18).toFixed(1))} min by cutting through direct paths.`,
             "Caution: Low lighting coverage on secondary corridors."
         ],
         steps: [

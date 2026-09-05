@@ -278,3 +278,119 @@ def test_html_and_css_mobile_view_invariants():
     assert "mobile-view-hud" in css
     assert "mobile-view-copilot" in css
     assert "mobile-view-havens" in css
+
+    # Apple iOS & Android Viewport Invariants
+    assert "viewport-fit=cover" in html
+    assert "apple-mobile-web-app-capable" in html
+    assert "apple-mobile-web-app-status-bar-style" in html
+    assert "apple-touch-icon" in html
+    assert "env(safe-area-inset-top" in css
+    assert "env(safe-area-inset-bottom" in css
+    assert "100dvh" in css
+    assert "-webkit-fill-available" in css
+
+    # Google Maps In-App Navigation Modal & Travel Modes
+    assert 'id="gmaps-nav-modal"' in html
+    assert 'id="gmaps-pill-walk"' in html
+    assert 'id="gmaps-pill-vehicle"' in html
+    assert 'id="gmaps-external-link"' in html
+    assert 'id="mode-walk-btn"' in html
+    assert 'id="mode-vehicle-btn"' in html
+    assert 'id="open-gmaps-view-btn"' in html
+    assert 'value="pune"' in html
+
+    with open("ui/js/app.js", "r", encoding="utf-8") as f:
+        js = f.read()
+
+    # Verify Pune preset in JS
+    assert "pune:" in js
+    assert "Bund Garden Police Station" in js
+    assert "Sassoon General Hospital" in js
+
+    # Verify Google Maps modal controllers in JS
+    assert "openGoogleMapsModal" in js
+    assert "setGoogleMapsMode" in js
+    assert "closeGoogleMapsModal" in js
+    assert "openGoogleMapsForActivePoi" in js
+
+
+def test_pune_and_travel_modes_integration(client):
+    """
+    Test switching to Pune, verifying Pune safe havens,
+    and testing walk vs vehicle routing calculations.
+    """
+    # 1. Switch to Pune
+    res = client.post("/api/switch-city", json={"city_key": "pune"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "CITY_SWITCHED"
+    assert "pune" in data["city_name"].lower()
+    assert data["total_pois"] >= 6
+
+    # 2. Verify Safe Bubble in Pune
+    res_b = client.get(f"/api/safe-bubble?lat={data['center']['lat']}&lon={data['center']['lon']}")
+    assert res_b.status_code == 200
+    bubble = res_b.json()
+    assert bubble["overall_zone_confidence"] >= 80.0
+
+    # 3. Verify Emergency routing in Pune
+    res_emg = client.post("/api/emergency", json={
+        "user_lat": data['center']['lat'],
+        "user_lon": data['center']['lon'],
+        "data_age_hours": 0.0
+    })
+    assert res_emg.status_code == 200
+    emg_data = res_emg.json()
+    assert emg_data["status"] == "EMERGENCY_ACTIVE"
+    assert emg_data["safest_destination"] is not None
+    assert len(emg_data["safest_route"]["path_coordinates"]) >= 2
+
+
+def test_walk_vs_vehicle_routing_speed_tradeoff(client):
+    """
+    Verify that walking vs vehicle travel modes dynamically modulate duration,
+    mode naming, and routing recommendations via the REST API.
+    """
+    client.post("/api/switch-city", json={"city_key": "pune"})
+    res_pois = client.get("/api/pois")
+    assert res_pois.status_code == 200
+    poi = res_pois.json()[0]
+
+    # Walk route
+    res_walk = client.get(f"/api/route?lat=18.5284&lon=73.8744&destination_id={poi['id']}&travel_mode=walking")
+    assert res_walk.status_code == 200
+    walk_data = res_walk.json()
+    walk_route = walk_data["safest_route"]
+    assert walk_route["mode"] == "walking"
+
+    # Vehicle route
+    res_veh = client.get(f"/api/route?lat=18.5284&lon=73.8744&destination_id={poi['id']}&travel_mode=vehicle")
+    assert res_veh.status_code == 200
+    veh_data = res_veh.json()
+    veh_route = veh_data["safest_route"]
+    assert veh_route["mode"] == "vehicle"
+
+    # Vehicular transit must be faster
+    assert veh_route["duration_minutes"] <= walk_route["duration_minutes"]
+    assert any("vehicular" in r.lower() or "arteries" in r.lower() for r in veh_route["why_recommended"])
+
+
+def test_service_worker_and_offline_shell_invariants():
+    """
+    Verify service worker script and offline PWA assets.
+    """
+    with open("ui/service-worker.js", "r", encoding="utf-8") as f:
+        sw = f.read()
+
+    assert "safeplace-v5" in sw
+    assert "safeplace-tiles-v1" in sw
+    assert "OFFLINE_TILE_SVG" in sw
+    assert "svg" in sw
+    assert "STATIC_ASSETS" in sw
+
+    with open("ui/js/app.js", "r", encoding="utf-8") as f:
+        app_js = f.read()
+
+    # Offline modal handling check
+    assert "Offline Mode Active" in app_js
+    assert "Open Google Maps App" in app_js

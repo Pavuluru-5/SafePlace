@@ -48,6 +48,7 @@
                 <i class="fa-solid fa-map-location-dot text-cyan"></i>
                 <select id="city-selector" class="form-select-sm city-dropdown">
                     <option value="current_gps" selected>📍 Live Device Location (Dynamic)</option>
+                    <option value="pune">🇮🇳 Pune (Camp / Shivajinagar / Kalyani Nagar)</option>
                     <option value="hyderabad">🇮🇳 Hyderabad (HITEC City)</option>
                     <option value="bangalore">🇮🇳 Bangalore (MG Road)</option>
                     <option value="delhi">🇮🇳 Delhi (Connaught Place)</option>
@@ -131,6 +132,11 @@
                         <button id="tab-safest" class="tab-btn active"><i class="fa-solid fa-shield-check"></i> Safest</button>
                         <button id="tab-fastest" class="tab-btn"><i class="fa-solid fa-bolt"></i> Fastest</button>
                     </div>
+                    <div class="travel-mode-tabs">
+                        <button id="mode-walk-btn" class="travel-mode-btn active" title="Walking Mode (Pedestrian)"><i class="fa-solid fa-person-walking"></i> Walk</button>
+                        <button id="mode-vehicle-btn" class="travel-mode-btn" title="Vehicle Mode (Car / Two-Wheeler)"><i class="fa-solid fa-car"></i> Vehicle</button>
+                        <button id="open-gmaps-view-btn" class="travel-mode-btn btn-gmaps-pill" title="View in Google Maps"><i class="fa-brands fa-google"></i> Maps</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div id="route-metrics" class="route-metrics-grid">
@@ -198,13 +204,16 @@
             <!-- Active Navigation Route HUD Banner -->
             <div id="active-route-banner" class="active-route-banner" style="display:none;">
                 <div class="route-banner-info">
-                    <i class="fa-solid fa-person-walking"></i>
+                    <i id="banner-mode-icon" class="fa-solid fa-person-walking text-cyan"></i>
                     <div class="banner-text">
                         <strong id="banner-dest-name">Destination Haven</strong>
                         <span id="banner-dest-meta">350m • ~4 min walk (Illuminated)</span>
                     </div>
                 </div>
-                <button class="banner-close-btn" onclick="window.clearActiveRoute()" title="Clear Active Route"><i class="fa-solid fa-xmark"></i></button>
+                <div class="banner-actions">
+                    <button id="banner-gmaps-btn" class="banner-gmaps-btn" onclick="window.openGoogleMapsForActivePoi()" title="Open Google Maps Navigation"><i class="fa-brands fa-google"></i> Maps</button>
+                    <button class="banner-close-btn" onclick="window.clearActiveRoute()" title="Clear Active Route"><i class="fa-solid fa-xmark"></i></button>
+                </div>
             </div>
 
             <div class="map-controls-floating">
@@ -286,6 +295,49 @@
             <span>Havens</span>
         </button>
     </nav>
+
+    <!-- Google Maps In-App Navigation Modal -->
+    <div id="gmaps-nav-modal" class="gmaps-modal-backdrop" style="display:none;" onclick="if(event.target===this) window.closeGoogleMapsModal();">
+        <div class="gmaps-modal-dialog">
+            <div class="gmaps-modal-header">
+                <div class="gmaps-header-info">
+                    <div class="gmaps-badge"><i class="fa-brands fa-google text-blue"></i> Google Maps Navigation</div>
+                    <h3 id="gmaps-dest-title">Destination Haven</h3>
+                    <span id="gmaps-dest-subtitle">From Current Location • Calculating...</span>
+                </div>
+                <button class="btn-close-gmaps" onclick="window.closeGoogleMapsModal()" title="Close Google Maps"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="gmaps-mode-bar">
+                <div class="mode-switcher-pills">
+                    <button id="gmaps-pill-walk" class="gmaps-pill active" onclick="window.setGoogleMapsMode('walk')">
+                        <i class="fa-solid fa-person-walking"></i> Walk Mode
+                    </button>
+                    <button id="gmaps-pill-vehicle" class="gmaps-pill" onclick="window.setGoogleMapsMode('vehicle')">
+                        <i class="fa-solid fa-car"></i> Vehicle Mode
+                    </button>
+                </div>
+                <a id="gmaps-external-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline gmaps-app-btn" title="Open Turn-by-Turn GPS in Google Maps App">
+                    <i class="fa-solid fa-diamond-turn-right text-cyan"></i> <span class="btn-text">Open Google Maps App</span>
+                </a>
+            </div>
+
+            <div class="gmaps-iframe-container">
+                <div id="gmaps-loading-spinner" class="gmaps-loader">
+                    <i class="fa-solid fa-spinner fa-spin text-cyan"></i>
+                    <span>Connecting to Google Maps Directions...</span>
+                </div>
+                <iframe id="gmaps-iframe" src="" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" onload="document.getElementById('gmaps-loading-spinner').style.display='none';"></iframe>
+            </div>
+
+            <div class="gmaps-modal-footer">
+                <div class="gmaps-footer-note">
+                    <i class="fa-solid fa-shield-halved text-green"></i> SafePlace illuminates verified refuge havens; Google Maps displays real-time pedestrian & vehicular traffic directions.
+                </div>
+                <button class="btn btn-sm btn-secondary" onclick="window.closeGoogleMapsModal()">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Local Leaflet JS (100% Offline) -->
     <script src="vendor/leaflet/leaflet.js"></script>

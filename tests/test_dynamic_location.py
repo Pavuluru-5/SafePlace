@@ -67,3 +67,12 @@ def test_dynamic_slm_chat_at_custom_location(client):
     data = res.json()
     assert "hospital" in data["response_text"].lower()
     assert data["tool_calls"] is not None
+
+def test_switch_city_to_pune(client):
+    res = client.post("/api/switch-city", json={"city_key": "pune"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "CITY_SWITCHED"
+    assert data["city_key"] == "pune"
+    assert "pune" in data["city_name"].lower()
+    assert data["total_pois"] >= 6
