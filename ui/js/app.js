@@ -69,9 +69,35 @@ function showToast(message, icon = 'fa-location-dot', duration = 2200) {
     }, duration);
 }
 
+// Helper to check if mobile layout should be active
+function isMobileMode() {
+    return document.body.classList.contains('is-mobile-layout') ||
+           document.documentElement.classList.contains('is-mobile-device') ||
+           window.innerWidth <= 1100 ||
+           ('ontouchstart' in window && window.innerWidth <= 1366);
+}
+
+function applyResponsiveLayout() {
+    if (isMobileMode()) {
+        document.body.classList.add('is-mobile-layout');
+        if (!state.activeTab) state.activeTab = 'map';
+        if (!document.body.classList.contains('mobile-view-map') &&
+            !document.body.classList.contains('mobile-view-hud') &&
+            !document.body.classList.contains('mobile-view-copilot') &&
+            !document.body.classList.contains('mobile-view-havens')) {
+            document.body.classList.add(`mobile-view-${state.activeTab}`);
+        }
+    } else {
+        document.body.classList.remove('is-mobile-layout');
+    }
+    if (map) {
+        setTimeout(() => map.invalidateSize(true), 100);
+    }
+}
+
 // Helper to check if map container is visible
 function isMapVisible() {
-    if (window.innerWidth > 992) return true;
+    if (!isMobileMode()) return true;
     return document.body.classList.contains('mobile-view-map');
 }
 
@@ -155,9 +181,11 @@ function initPWA() {
 
 // Mobile Bottom Navigation Controller
 function initMobileNavigation() {
-    document.body.classList.add('mobile-view-map');
-    const navButtons = document.querySelectorAll('.m-nav-btn');
+    applyResponsiveLayout();
+    window.addEventListener('resize', applyResponsiveLayout);
+    window.addEventListener('orientationchange', applyResponsiveLayout);
 
+    const navButtons = document.querySelectorAll('.m-nav-btn');
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const target = btn.getAttribute('data-target');
@@ -307,7 +335,7 @@ function initEventListeners() {
             }).catch(() => {});
             updateLocation(preset.center.lat, preset.center.lon, true, preset.name);
             addChatMessage(`Switched location to **${preset.name}**. Verified municipal havens and safe corridors loaded.`, 'ai');
-            if (window.innerWidth <= 992) {
+            if (isMobileMode()) {
                 switchMobileView('map');
             }
         });
@@ -749,7 +777,7 @@ function detectAndApplyUserLocation(isUserInitiated = false) {
             updateLocation(lat, lon, false, "Live GPS Location");
             addChatMessage(`📍 **GPS Position Locked**: Centered on (**${lat.toFixed(4)}, ${lon.toFixed(4)}**). Dynamic Safe Bubble and 24/7 verified refuge havens generated around your real location.`, 'ai');
             
-            if (window.innerWidth <= 992) {
+            if (isMobileMode()) {
                 switchMobileView('map');
             }
         },
@@ -897,7 +925,7 @@ window.selectPoiById = function(poiId) {
     showToast(`Navigating to ${poi.name} • ${distStr} (~${walkMin} min walk)`, 'fa-route', 2500);
 
     // If on havens tab or copilot on mobile, switch to map
-    if (window.innerWidth <= 992 && !document.body.classList.contains('mobile-view-map')) {
+    if (isMobileMode() && !document.body.classList.contains('mobile-view-map')) {
         switchMobileView('map');
     }
 
@@ -1257,7 +1285,7 @@ function applyEmergencyPlan(plan) {
     addChatMessage(plan.slm_guidance, 'ai', plan.abstained || false, plan.safest_destination);
 
     // Switch to map on mobile
-    if (window.innerWidth <= 992) {
+    if (isMobileMode()) {
         switchMobileView('map');
     }
 
