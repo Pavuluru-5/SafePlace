@@ -133,23 +133,34 @@ class OnDeviceSLMCopilot:
         evidence = {}
 
         # 0. Greetings & Assistant Introduction
-        greeting_words = ["hi", "hello", "hey", "greetings", "namaste", "good morning", "good evening"]
-        if any(q_lower == w or q_lower.startswith(w + " ") or q_lower.startswith(w + ",") or q_lower.startswith(w + "!") for w in greeting_words) and not any(w in q_lower for w in ["hospital", "police", "safe", "route", "help", "emergency"]):
+        greeting_words = ["hi", "hello", "hey", "greetings", "namaste", "good morning", "good evening", "good afternoon", "how are you", "what's up", "hey there", "yo"]
+        is_greeting = any(
+            q_lower == w or 
+            q_lower.startswith(w + " ") or 
+            q_lower.startswith(w + ",") or 
+            q_lower.startswith(w + "!") or 
+            q_lower.startswith(w + "?") or 
+            q_lower.endswith(" " + w)
+            for w in greeting_words
+        )
+        is_safety_query = any(w in q_lower for w in ["hospital", "police", "pharmacy", "route", "help", "emergency", "danger", "distance", "how far", "bubble", "why", "compare"])
+
+        if is_greeting and not is_safety_query:
             bubble = self.safe_bubble_monitor.calculate_safe_bubble(user_lat, user_lon, travel_mode=travel_mode, age_hours_override=age_hours_override)
             tool_calls_record.append({"tool": "get_safe_bubble", "args": {"lat": user_lat, "lon": user_lon}, "status": "OK"})
             b5 = len(bubble.bands[0].destinations) if len(bubble.bands) > 0 else 0
             b10 = len(bubble.bands[1].destinations) if len(bubble.bands) > 1 else 0
             
             response_text = (
-                f"Hello! I am your **SafePlace AI Safety Copilot**, running locally on-device.\n\n"
-                f"🛡️ **Current Safety Status**:\n"
-                f"• Safe Bubble: {b5} haven(s) in 5-min reach, {b10} in 10-min reach.\n"
-                f"• Data Confidence: {bubble.overall_zone_confidence:.0f}% ({'Active' if bubble.is_in_safe_zone else 'Advisory'}).\n\n"
-                f"**How I can assist you**:\n"
+                f"Hello! I am your **SafePlace AI Safety Copilot**, active and monitoring your surroundings locally on-device.\n\n"
+                f"🛡️ **Current Live Safety Status**:\n"
+                f"• Safe Bubble: **{b5} haven(s)** reachable in 5 mins, **{b10}** reachable in 10 mins.\n"
+                f"• Evidence Confidence: **{bubble.overall_zone_confidence:.0f}%** ({'Active' if bubble.is_in_safe_zone else 'Advisory'}).\n\n"
+                f"**How I can assist you right now**:\n"
                 f"• Ask *'Where is the nearest hospital?'* or *'Find a 24/7 pharmacy'*\n"
-                f"• Ask *'Why did you choose this route?'* to inspect lighting and safety scores\n"
-                f"• Ask *'Compare routes'* to view safe corridors vs. shortcut trade-offs\n"
-                f"• State *'I'm not safe'* for instant emergency routing"
+                f"• Ask *'How far is Cyberabad Police Station?'* for instant distance & walk time\n"
+                f"• Ask *'Why did you choose this route?'* to inspect street lighting and safety evidence\n"
+                f"• State *'I'm not safe'* for immediate emergency corridor routing"
             )
             return SLMResponse(
                 query=query,
@@ -161,8 +172,33 @@ class OnDeviceSLMCopilot:
                 evidence_grounding={"status": bubble.status_message}
             )
 
+        # Conversational Acknowledgements & Pleasantries
+        pleasantry_words = ["thanks", "thank you", "thx", "ok", "okay", "great", "got it", "cool", "perfect", "awesome", "bye", "goodbye", "see you", "alright", "sure", "sounds good", "nice"]
+        is_pleasantry = any(
+            q_lower == w or 
+            q_lower.startswith(w + " ") or 
+            q_lower.startswith(w + ",") or 
+            q_lower.startswith(w + "!") or 
+            q_lower.endswith(" " + w)
+            for w in pleasantry_words
+        )
+        if is_pleasantry and not is_safety_query:
+            response_text = (
+                "You're very welcome! I am actively keeping track of your Safe Bubble and verified corridors. "
+                "Whenever you need safe navigation, distance information, or emergency refuge, I'm right here with you."
+            )
+            return SLMResponse(
+                query=query,
+                response_text=response_text,
+                abstained=False,
+                confidence_tier="HIGH",
+                confidence_score=100.0,
+                tool_calls=[{"tool": "conversational_acknowledgement", "args": {}, "status": "OK"}],
+                evidence_grounding={"mode": "active_monitoring"}
+            )
+
         # Capabilities / Help intent
-        if any(w in q_lower for w in ["what can you do", "who are you", "what is safeplace", "features", "how does this work", "how do you work", "commands"]):
+        if any(w in q_lower for w in ["what can you do", "who are you", "what is safeplace", "features", "how does this work", "how do you work", "commands", "help me understand"]):
             response_text = (
                 f"**SafePlace** is an offline-first AI safety assistant engineered for on-device protection:\n\n"
                 f"1. **Dynamic Safe Bubble**: Continuously calculates trusted havens (Police, Hospitals, 24/7 Pharmacies, Shelters) within 5, 10, and 15-minute walking radius.\n"
@@ -347,6 +383,20 @@ class OnDeviceSLMCopilot:
                 f"• **Hazard Exposure**: Avoid narrow secondary alley cuts which have limited lighting (under 20%) and historical hazard reports.\n"
                 f"• **Incident Aggregates**: {inc_count} historical incident reports recorded in surrounding 1km grid ({conf.tier} confidence tier).\n"
                 f"• **Guidance**: Stay along illuminated primary avenues highlighted in green on your map."
+            )
+
+        # Intent: Distance & Proximity Inquiry
+        elif any(w in q_lower for w in ["how far", "distance", "how long", "walking time", "how many minutes", "how many meters", "eta", "time to walk", "far is"]):
+            dur_min = max(1.0, round(safest_route.duration_minutes, 1))
+            dist_m = round(safest_route.distance_meters)
+            response_text = (
+                f"📍 **Distance to {selected_poi.name}** ({selected_poi.category.replace('_', ' ').title()}):\n\n"
+                f"• **Walking Distance**: **{dist_m} meters**\n"
+                f"• **Estimated Time**: **~{dur_min:.1f} min walk** at normal pace\n"
+                f"• **Route Lighting**: **{safest_route.lighting_percentage:.0f}% street illumination**\n"
+                f"• **Operating Hours**: {selected_poi.opening_hours}\n"
+                f"• **Contact**: {selected_poi.phone or 'Emergency 112 / 100'}\n\n"
+                f"The illuminated safe corridor has been highlighted on your map."
             )
 
         # Intent: Category-specific POI search

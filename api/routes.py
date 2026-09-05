@@ -75,7 +75,7 @@ def ensure_location_context(lat: float, lon: float):
         return
 
     min_dist = min(haversine_distance_meters(lat, lon, p.lat, p.lon) for p in pois)
-    if min_dist > 600:
+    if min_dist > 5000:
         from data.dataset_builder import seed_database_with_coords
         seed_database_with_coords(db, lat, lon, "Local Area")
         route_engine.build_graph()

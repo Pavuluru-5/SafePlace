@@ -1185,20 +1185,33 @@ body.dark-theme {
 
     .city-selector-box {
         padding: 3px 6px;
+        gap: 4px;
     }
 
     .city-dropdown {
-        max-width: 110px;
+        max-width: 105px;
     }
 
     .map-controls-floating {
         bottom: 76px;
-        left: 12px;
+        left: 10px;
+        gap: 6px;
+    }
+
+    .map-float-btn {
+        padding: 6px 10px;
+        font-size: 0.72rem;
+    }
+
+    .map-legend {
+        display: none;
     }
 
     .mobile-emergency-fab {
         bottom: 76px;
-        right: 12px;
+        right: 10px;
+        padding: 8px 14px;
+        font-size: 0.8rem;
     }
 }
 

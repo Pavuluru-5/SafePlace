@@ -43,6 +43,7 @@
                     <option value="san_francisco">🇺🇸 San Francisco (Downtown)</option>
                 </select>
                 <button id="real-gps-btn" class="btn btn-sm btn-outline" title="Use My Real Device GPS Location"><i class="fa-solid fa-crosshairs"></i> <span class="btn-text">Locate Me</span></button>
+                <button id="recalibrate-header-btn" class="btn btn-sm btn-outline btn-recalibrate" title="Recalibrate Safe Havens to Current Position"><i class="fa-solid fa-arrows-rotate text-cyan"></i> <span class="btn-text">Recalibrate</span></button>
             </div>
             <div class="status-item desktop-only">
                 <span class="pulse-dot green"></span>
@@ -82,7 +83,10 @@
             <div class="card safe-bubble-card">
                 <div class="card-header">
                     <h3><i class="fa-solid fa-circle-nodes text-cyan"></i> Dynamic Safe Bubble</h3>
-                    <span id="bubble-status-badge" class="badge badge-success">Active</span>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <button id="recalibrate-card-btn" class="btn btn-sm btn-outline" title="Recalibrate safe havens around current location" style="padding:2px 8px; font-size:0.72rem;"><i class="fa-solid fa-arrows-rotate text-cyan"></i> Recalibrate</button>
+                        <span id="bubble-status-badge" class="badge badge-success">Active</span>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="bubble-stats">
@@ -193,6 +197,7 @@
 
             <div class="map-controls-floating">
                 <button id="reset-loc-btn" class="map-float-btn" title="Reset User Location to Center"><i class="fa-solid fa-crosshairs"></i> My Location</button>
+                <button id="recalibrate-map-btn" class="map-float-btn" style="color:var(--color-cyan);" title="Recalibrate Safe Havens to Current Location"><i class="fa-solid fa-arrows-rotate"></i> Recalibrate</button>
                 <div class="map-legend">
                     <span class="legend-item"><span class="legend-dot dot-safe"></span> Safest Route</span>
                     <span class="legend-item"><span class="legend-dot dot-fast"></span> Fastest Route</span>
@@ -224,6 +229,8 @@
             <!-- Demo Suggested Prompts -->
             <div class="demo-pills">
                 <span class="pill" data-prompt="Where is the safest place I can reach right now?">🛡️ Safest place nearby?</span>
+                <span class="pill" data-prompt="How far is the nearest hospital?">📍 Distance to hospital?</span>
+                <span class="pill" data-prompt="Hello, how are you?">👋 Hello</span>
                 <span class="pill" data-prompt="Why did you choose this route?">🔍 Why this route?</span>
                 <span class="pill" data-prompt="Compare the fastest route with the safest route">⚖️ Compare routes</span>
                 <span class="pill" data-prompt="What is my dynamic safe bubble status?">🌐 Safe Bubble status</span>
