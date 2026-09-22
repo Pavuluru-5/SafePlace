@@ -165,3 +165,4 @@ class SLMResponse(BaseModel):
     evidence_grounding: Dict[str, Any]
     suggested_route: Optional[Route] = None
     suggested_poi: Optional[POI] = None
+    follow_up_chips: List[str] = []

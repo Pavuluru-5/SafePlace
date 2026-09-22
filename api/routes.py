@@ -4,7 +4,7 @@ FastAPI endpoints for POIs, Safe Bubble, Safe vs Fast Routing, Emergency Trigger
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -61,17 +61,26 @@ def get_system_status():
     }
 
 
+_last_context_check: Optional[Tuple[float, float]] = None
+
+
 def ensure_location_context(lat: float, lon: float):
     """
     Checks if current database has reachable POIs near (lat, lon).
-    If the nearest POI is > 600 meters away, automatically seeds the spatial network
-    around (lat, lon) so that all queries and routes succeed with local havens.
+    Memoizes checks within 50 meters to eliminate redundant computations.
     """
+    global _last_context_check
+    if _last_context_check is not None:
+        dist_from_last = haversine_distance_meters(lat, lon, _last_context_check[0], _last_context_check[1])
+        if dist_from_last < 50.0:
+            return
+
     pois = db.get_all_pois()
     if not pois:
         from data.dataset_builder import seed_database_with_coords
         seed_database_with_coords(db, lat, lon, "Local Area")
         route_engine.build_graph()
+        _last_context_check = (lat, lon)
         return
 
     min_dist = min(haversine_distance_meters(lat, lon, p.lat, p.lon) for p in pois)
@@ -79,6 +88,8 @@ def ensure_location_context(lat: float, lon: float):
         from data.dataset_builder import seed_database_with_coords
         seed_database_with_coords(db, lat, lon, "Local Area")
         route_engine.build_graph()
+
+    _last_context_check = (lat, lon)
 
 
 @router.get("/pois", response_model=List[POI])
@@ -266,6 +277,8 @@ class SetLocationRequest(BaseModel):
 @router.post("/switch-city")
 def switch_city(req: CitySwitchRequest):
     """Switch active city and re-seed local spatial database."""
+    global _last_context_check
+    _last_context_check = None
     from data.dataset_builder import seed_offline_database
     meta = seed_offline_database(db, req.city_key)
     route_engine.build_graph()
@@ -282,6 +295,8 @@ def switch_city(req: CitySwitchRequest):
 @router.post("/set-location")
 def set_custom_location(req: SetLocationRequest):
     """Dynamically seed safety network around user's exact coordinates."""
+    global _last_context_check
+    _last_context_check = None
     from data.dataset_builder import seed_database_with_coords
     meta = seed_database_with_coords(db, req.lat, req.lon, req.name)
     route_engine.build_graph()

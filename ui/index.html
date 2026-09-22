@@ -261,9 +261,28 @@
             <div class="chat-messages" id="chat-messages">
                 <div class="msg msg-ai">
                     <div class="msg-content">
-                        <strong style="color:var(--color-cyan); font-size:0.8rem;"><i class="fa-solid fa-brain"></i> SafePlace Copilot</strong>
+                        <div class="chat-msg-header">
+                            <strong style="color:var(--color-cyan); font-size:0.8rem;"><i class="fa-solid fa-brain"></i> SafePlace Copilot</strong>
+                            <button type="button" class="chat-audio-btn" data-speaking="false" onclick="window.toggleMessageSpeech(this, 'Hello! I am your offline AI safety assistant. I monitor your dynamic Safe Bubble, evaluate well-lit corridors and emergency proximity, and explain my recommendations with verified evidence.')" title="Read message aloud">
+                                <i class="fa-solid fa-volume-high"></i> Listen
+                            </button>
+                        </div>
                         <p>Hello! I am your offline AI safety assistant. I monitor your dynamic Safe Bubble, evaluate well-lit corridors and emergency proximity, and explain my recommendations with verified evidence.</p>
                         <div class="guardrail-tag"><i class="fa-solid fa-check-double"></i> Grounded in local spatial telemetry</div>
+                        <div class="chat-followup-chips">
+                            <span class="chat-chips-label"><i class="fa-solid fa-wand-magic-sparkles"></i> Suggested next:</span>
+                            <div class="chat-chips-scroll">
+                                <button type="button" class="chat-chip" onclick="window.triggerChatChip('Where is the safest place I can reach right now?')">
+                                    🛡️ Safest place nearby?
+                                </button>
+                                <button type="button" class="chat-chip" onclick="window.triggerChatChip('How far is the nearest hospital?')">
+                                    📍 Nearest hospital?
+                                </button>
+                                <button type="button" class="chat-chip" onclick="window.triggerChatChip('What is my dynamic safe bubble status?')">
+                                    🌐 Safe Bubble status
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

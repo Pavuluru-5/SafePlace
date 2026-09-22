@@ -224,7 +224,10 @@ class SafeRouteEngine:
         start_node = self.find_nearest_node(user_lat, user_lon)
         end_node = self.find_nearest_node(destination.lat, destination.lon)
 
-        if start_node == end_node:
+        if not self.graph.nodes or start_node not in self.graph or end_node not in self.graph:
+            fast_path = [start_node, end_node]
+            safe_path = [start_node, end_node]
+        elif start_node == end_node:
             # Single node path
             fast_path = [start_node]
             safe_path = [start_node]
@@ -232,13 +235,13 @@ class SafeRouteEngine:
             try:
                 # Fast route uses 'fast_weight' (travel time)
                 fast_path = nx.shortest_path(self.graph, source=start_node, target=end_node, weight='fast_weight')
-            except nx.NetworkXNoPath:
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
                 fast_path = [start_node, end_node]
 
             try:
                 # Safe route uses 'safe_weight' (travel time + risk penalty + uncertainty penalty)
                 safe_path = nx.shortest_path(self.graph, source=start_node, target=end_node, weight='safe_weight')
-            except nx.NetworkXNoPath:
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
                 safe_path = fast_path
 
         fastest_route = self._reconstruct_route_details(

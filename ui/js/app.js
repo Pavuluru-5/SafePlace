@@ -422,27 +422,31 @@ function initEventListeners() {
         emergencyBtn.addEventListener('click', triggerEmergencyMode);
     }
 
-    // Data Age Slider
+    // Data Age Slider (Debounced for fluid 60fps dragging)
     const slider = document.getElementById('data-age-slider');
     const ageVal = document.getElementById('data-age-val');
+    let sliderDebounceTimer = null;
     if (slider) {
         slider.addEventListener('input', (e) => {
             const hours = parseInt(e.target.value);
             state.dataAgeHours = hours;
             if (ageVal) ageVal.textContent = hours > 24 ? `${Math.round(hours / 24)}d (${hours}h)` : `${hours}h`;
             
-            // Recompute bubble and route instantly
-            updateSafeBubble();
-            if (state.selectedPoi) {
-                calculateAndDrawRoutes(state.selectedPoi.id);
-            }
+            clearTimeout(sliderDebounceTimer);
+            sliderDebounceTimer = setTimeout(() => {
+                // Recompute bubble and route smoothly
+                updateSafeBubble();
+                if (state.selectedPoi) {
+                    calculateAndDrawRoutes(state.selectedPoi.id);
+                }
 
-            // Sync with backend in background
-            fetchWithTimeout('/api/data-trust/age', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hours: hours })
-            }, 1000).catch(() => {});
+                // Sync with backend in background
+                fetchWithTimeout('/api/data-trust/age', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hours: hours })
+                }, 1000).catch(() => {});
+            }, 120);
         });
     }
 
@@ -706,7 +710,7 @@ window.recalibrateSafeHavens = recalibrateSafeHavens;
 // CORE DUAL-TIER LOCATION CONTROLLER
 // Calibrates distances to fixed geographic havens (< 5km)
 // -------------------------------------------------------------
-function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Location") {
+function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Location", showFeedbackToast = false) {
     state.userLat = lat;
     state.userLon = lon;
 
@@ -763,7 +767,9 @@ function updateLocation(lat, lon, isPresetSwitch = false, locName = "Current Loc
         }
     }
 
-    showToast(`Location Calibrated • ${state.pois.length} Havens Active`, 'fa-circle-check');
+    if (showFeedbackToast || isPresetSwitch) {
+        showToast(`Location Calibrated • ${state.pois.length} Havens Active`, 'fa-circle-check');
+    }
 
     // --- 2. DEBOUNCED FAST SERVER SYNCHRONIZATION (Background) ---
     clearTimeout(syncDebounceTimer);
@@ -1160,6 +1166,9 @@ window.openGoogleMapsForActivePoi = function() {
 };
 
 window.clearActiveRoute = function() {
+    if ('speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
     state.selectedPoi = null;
     state.currentRouteData = null;
     if (state.routeLayers.safest && map) map.removeLayer(state.routeLayers.safest);
@@ -1586,15 +1595,95 @@ function sendUserChatMessage(text) {
     });
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+window.triggerChatChip = function(promptText) {
+    if (!promptText) return;
+    sendUserChatMessage(promptText);
+};
+
+window.toggleRouteComparison = function(poiId) {
+    if (poiId) window.selectPoiById(poiId);
+    const nextMode = (state.activeRouteMode === 'safest') ? 'fastest' : 'safest';
+    setRouteMode(nextMode);
+    if (isMobileLayout()) {
+        switchMobileView('hud');
+    }
+    showToast(`Switched to ${nextMode.toUpperCase()} route`, 'fa-scale-balanced');
+};
+
+let currentSpeakingBtn = null;
+
+window.toggleMessageSpeech = function(btn, rawText) {
+    if (!('speechSynthesis' in window)) {
+        showToast("Speech synthesis not supported in this browser", "fa-volume-xmark");
+        return;
+    }
+    const isSpeaking = btn.getAttribute('data-speaking') === 'true';
+    if (isSpeaking) {
+        window.speechSynthesis.cancel();
+        btn.setAttribute('data-speaking', 'false');
+        btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
+        btn.classList.remove('active');
+        if (currentSpeakingBtn === btn) currentSpeakingBtn = null;
+        return;
+    }
+
+    // Reset any currently speaking button
+    document.querySelectorAll('.chat-audio-btn').forEach(b => {
+        b.setAttribute('data-speaking', 'false');
+        b.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
+        b.classList.remove('active');
+    });
+
+    window.speechSynthesis.cancel();
+    const clean = String(rawText || '')
+        .replace(/[*#•_`~]/g, ' ')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const utter = new SpeechSynthesisUtterance(clean);
+    currentSpeakingBtn = btn;
+
+    utter.onend = () => {
+        btn.setAttribute('data-speaking', 'false');
+        btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
+        btn.classList.remove('active');
+        if (currentSpeakingBtn === btn) currentSpeakingBtn = null;
+    };
+    utter.onerror = () => {
+        btn.setAttribute('data-speaking', 'false');
+        btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
+        btn.classList.remove('active');
+        if (currentSpeakingBtn === btn) currentSpeakingBtn = null;
+    };
+
+    btn.setAttribute('data-speaking', 'true');
+    btn.innerHTML = '<i class="fa-solid fa-stop text-red"></i> Stop';
+    btn.classList.add('active');
+    window.speechSynthesis.speak(utter);
+};
+
 function handleChatResponse(resp) {
     const typingEl = document.getElementById('chat-typing-indicator');
     if (typingEl) typingEl.remove();
 
     const responseText = resp.response_text || 'No response generated.';
-    addChatMessage(responseText, 'ai', resp.abstained || false, resp.suggested_poi);
+    const followUpChips = resp.follow_up_chips || [];
+    addChatMessage(responseText, 'ai', resp.abstained || false, resp.suggested_poi, followUpChips, resp.suggested_route);
 
     if (resp.suggested_poi) {
         state.selectedPoi = resp.suggested_poi;
+        state.lastCopilotPoi = resp.suggested_poi;
         if (state.poiMarkers[resp.suggested_poi.id] && isMapVisible()) {
             try {
                 state.poiMarkers[resp.suggested_poi.id].openPopup();
@@ -1617,21 +1706,9 @@ function handleChatResponse(resp) {
             drawRoutePolylines(resp.suggested_route, resp.suggested_route);
         }
     }
-
-    if ('speechSynthesis' in window && !resp.abstained && responseText) {
-        try {
-            window.speechSynthesis.cancel();
-            const cleanText = responseText.replace(/[*#•_`~]/g, '');
-            const utter = new SpeechSynthesisUtterance(cleanText.substring(0, 160));
-            utter.onerror = () => {};
-            window.speechSynthesis.speak(utter);
-        } catch (e) {
-            console.warn('Speech synthesis notice:', e);
-        }
-    }
 }
 
-function addChatMessage(content, sender, isAbstained = false, suggestedPoi = null) {
+function addChatMessage(content, sender, isAbstained = false, suggestedPoi = null, followUpChips = [], suggestedRoute = null) {
     const chatContainer = document.getElementById('chat-messages');
     if (!chatContainer) return;
 
@@ -1660,23 +1737,58 @@ function addChatMessage(content, sender, isAbstained = false, suggestedPoi = nul
 
         let actionBtnHtml = '';
         if (suggestedPoi && suggestedPoi.id) {
+            const phoneBtn = suggestedPoi.phone
+                ? `<a href="tel:${escapeHtml(suggestedPoi.phone)}" class="chat-action-btn chat-action-call" title="Call ${escapeHtml(suggestedPoi.name)} directly">
+                       <i class="fa-solid fa-phone"></i> Call
+                   </a>`
+                : '';
+
             actionBtnHtml = `
                 <div class="chat-msg-actions">
-                    <button class="chat-action-btn" onclick="window.viewRouteOnMap('${suggestedPoi.id}')">
-                        <i class="fa-solid fa-map-location-dot"></i> View Route on Map
+                    <button type="button" class="chat-action-btn" onclick="window.viewRouteOnMap('${escapeHtml(suggestedPoi.id)}')" title="Center map on corridor">
+                        <i class="fa-solid fa-map-location-dot"></i> View on Map
+                    </button>
+                    <button type="button" class="chat-action-btn" onclick="window.toggleRouteComparison('${escapeHtml(suggestedPoi.id)}')" title="Compare Safest vs Fastest">
+                        <i class="fa-solid fa-scale-balanced"></i> Compare Routes
+                    </button>
+                    ${phoneBtn}
+                    <button type="button" class="chat-action-btn" onclick="window.openGoogleMapsModal('${escapeHtml(suggestedPoi.id)}')" title="Turn-by-turn navigation">
+                        <i class="fa-brands fa-google text-blue"></i> Maps
                     </button>
                 </div>
             `;
         }
 
+        let chipsHtml = '';
+        if (followUpChips && followUpChips.length > 0) {
+            chipsHtml = `
+                <div class="chat-followup-chips">
+                    <span class="chat-chips-label"><i class="fa-solid fa-wand-magic-sparkles"></i> Suggested next:</span>
+                    <div class="chat-chips-scroll">
+                        ${followUpChips.map(c => `
+                            <button type="button" class="chat-chip" onclick="window.triggerChatChip('${escapeHtml(c)}')">
+                                ${escapeHtml(c)}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        const cleanJsonText = JSON.stringify(text);
+
         msgDiv.innerHTML = `
             <div class="msg-content">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <div class="chat-msg-header">
                     <strong style="color:var(--color-cyan); font-size:0.8rem;"><i class="fa-solid fa-brain"></i> SafePlace Copilot</strong>
+                    <button type="button" class="chat-audio-btn" data-speaking="false" onclick='window.toggleMessageSpeech(this, ${cleanJsonText})' title="Read message aloud">
+                        <i class="fa-solid fa-volume-high"></i> Listen
+                    </button>
                 </div>
                 <div>${formatted}</div>
                 ${actionBtnHtml}
                 ${tag}
+                ${chipsHtml}
             </div>
         `;
     } else {
@@ -1684,7 +1796,7 @@ function addChatMessage(content, sender, isAbstained = false, suggestedPoi = nul
     }
 
     chatContainer.appendChild(msgDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
 }
 
 // -------------------------------------------------------------
@@ -1982,6 +2094,55 @@ function generateClientOfflineRoute(userLat, userLon, destination) {
     return { safest_route: safest, fastest_route: fastest, destination: destination };
 }
 
+function calcStringSimilarity(s1, s2) {
+    if (!s1 || !s2) return 0.0;
+    if (s1 === s2) return 1.0;
+    const a = s1.toLowerCase();
+    const b = s2.toLowerCase();
+    const m = a.length, n = b.length;
+    if (Math.abs(m - n) > 3) return 0.0;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+        }
+    }
+    const maxLen = Math.max(m, n);
+    return maxLen === 0 ? 1.0 : (maxLen - dp[m][n]) / maxLen;
+}
+
+function matchesAnyFuzzyJS(text, targets, threshold = 0.80) {
+    const textLower = (text || '').toLowerCase();
+    const words = textLower.match(/\b[a-z0-9]+\b/g) || [];
+    const wordSet = new Set(words);
+
+    for (const t of targets) {
+        const tLower = t.toLowerCase();
+        if (tLower.includes(" ")) {
+            const regex = new RegExp('\\b' + tLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+            if (regex.test(textLower)) return true;
+        } else {
+            if (wordSet.has(tLower)) return true;
+        }
+    }
+
+    for (const word of words) {
+        if (word.length >= 4) {
+            for (const t of targets) {
+                if (!t.includes(" ") && t.length >= 4) {
+                    if (calcStringSimilarity(word, t) >= threshold) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
     const qLower = (query || '').toLowerCase().trim();
     const activePois = (pois && pois.length > 0) ? pois : getClientOfflinePois(state.currentCity);
@@ -2001,10 +2162,13 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
         };
     }
 
-    const isSafetyKeyword = ["hospital", "police", "pharmacy", "route", "help", "emergency", "danger", "distance", "how far", "bubble", "why", "compare"].some(w => qLower.includes(w));
+    const isSafetyKeyword = [
+        "hospital", "police", "pharmacy", "route", "help", "emergency", "danger",
+        "distance", "how far", "bubble", "why", "compare", "safe", "threat", "hazard"
+    ].some(w => qLower.includes(w));
 
-    // 2. Greetings Handler (Smooth conversational transition without route disruption)
-    const greetingWords = ["hi", "hello", "hey", "greetings", "namaste", "good morning", "good evening", "good afternoon", "how are you", "what's up", "hey there", "yo"];
+    // 2. Greetings Handler
+    const greetingWords = ["hi", "hello", "hey", "greetings", "namaste", "good morning", "good evening", "good afternoon", "how are you", "what's up", "hey there", "yo", "namaskaram"];
     const isGreeting = greetingWords.some(w => 
         qLower === w || 
         qLower.startsWith(w + ' ') || 
@@ -2025,7 +2189,13 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 96.0,
             suggested_poi: null,
-            suggested_route: null
+            suggested_route: null,
+            follow_up_chips: [
+                "🛡️ Safest place nearby?",
+                "📍 Nearest hospital?",
+                "🌐 Safe Bubble status",
+                "⚖️ Compare routes"
+            ]
         };
     }
 
@@ -2047,7 +2217,12 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 98.0,
             suggested_poi: null,
-            suggested_route: null
+            suggested_route: null,
+            follow_up_chips: [
+                "🛡️ Where is the safest haven?",
+                "📍 Nearest hospital?",
+                "🌐 Safe Bubble status"
+            ]
         };
     }
 
@@ -2060,25 +2235,111 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 100.0,
             suggested_poi: null,
-            suggested_route: null
+            suggested_route: null,
+            follow_up_chips: [
+                "🛡️ Safest place nearby?",
+                "🔍 Why choose safest route?",
+                "🌐 Safe Bubble status"
+            ]
         };
     }
 
-    // 5. Explicit Distance & Walking ETA Inquiry
-    if (["how far", "distance", "how long", "walking time", "how many minutes", "how many meters", "far is", "eta", "time to walk"].some(w => qLower.includes(w))) {
+    // -------------------------------------------------------------
+    // Target Keyword Clusters (Fuzzy Enabled)
+    // -------------------------------------------------------------
+    const hospTargets = [
+        "hospital", "clinic", "doctor", "doc", "physician", "trauma", "medical", "medicine",
+        "ambulance", "emergency room", "er", "medicover", "lilavati", "rml", "manipal", "healthcare",
+        "bleeding", "injury", "hurt", "fracture", "wound"
+    ];
+    const policeTargets = [
+        "police", "cop", "cops", "station", "precinct", "cyberabad", "cubbon", "bandra",
+        "security", "patrol", "constable", "law enforcement", "chowki", "thana", "guard", "escort"
+    ];
+    const pharmTargets = [
+        "pharmacy", "chemist", "drug", "drugstore", "apollo", "medplus", "noble", "first aid",
+        "prescription", "bandage", "bandages", "antiseptic", "pills", "tablets", "medical store"
+    ];
+    const distressTargets = [
+        "emergency", "help", "not safe", "danger", "scared", "threat", "following me",
+        "stalker", "attack", "sos", "frightened", "nervous", "jittery", "creepy", "creeping",
+        "harassment", "save me", "panic", "trouble", "threatened"
+    ];
+    const compareTargets = [
+        "compare", "fastest", "fast vs safe", "difference", "shortest", "quickest", "vs",
+        "which is better", "better lit", "illumination", "more lights", "street lights", "dark alley"
+    ];
+    const whyTargets = ["why", "explain", "reason", "choose", "how come", "why this", "justify"];
+    const distanceTargets = [
+        "how far", "distance", "how long", "walking time", "how many minutes", "how many meters",
+        "far is", "eta", "time to walk", "how close", "walk time"
+    ];
+    const timingTargets = [
+        "open", "hours", "timing", "timings", "opening hours", "operating hours",
+        "close", "closing", "closing time", "is it open", "are they open", "schedule"
+    ];
+    const phoneTargets = [
+        "phone", "call", "telephone", "contact", "contact number", "phone number",
+        "mobile", "number", "dial", "reach them", "call them"
+    ];
+    const bubbleTargets = ["bubble", "area", "around", "zone", "isochrone", "reachability", "5 min", "10 min", "15 min", "haven", "perimeter"];
+
+    // -------------------------------------------------------------
+    // Out-of-Domain (OOD) Guardrail
+    // -------------------------------------------------------------
+    const allInDomainTargets = [
+        ...hospTargets, ...policeTargets, ...pharmTargets, ...distressTargets,
+        ...compareTargets, ...whyTargets, ...distanceTargets, ...timingTargets,
+        ...phoneTargets, ...bubbleTargets,
+        "safe", "safety", "safest", "place", "places", "route", "corridor", "walk",
+        "direction", "directions", "where", "navigation", "map", "reach", "safeplace"
+    ];
+    activePois.forEach(p => {
+        (p.name || '').toLowerCase().split(/\s+/).forEach(w => {
+            if (w.length > 2) allInDomainTargets.push(w);
+        });
+    });
+
+    let isDomainMatch = matchesAnyFuzzyJS(qLower, allInDomainTargets, 0.80);
+    if (!isDomainMatch && (state.selectedPoi || state.lastCopilotPoi)) {
+        const followupWords = ["it", "they", "them", "open", "phone", "call", "hours", "timing", "timings", "number", "far", "why", "compare"];
+        if (followupWords.some(w => qLower.includes(w))) {
+            isDomainMatch = true;
+        }
+    }
+
+    if (!isDomainMatch) {
+        return {
+            query: query,
+            response_text: `I am your **SafePlace AI Safety Copilot**, dedicated exclusively to personal safety, safe refuge, and illuminated navigation.\n\nI don't have information on general topics, but I can assist you with:\n• 🛡️ Finding the nearest **verified haven** (Police Station, Hospital, 24/7 Pharmacy)\n• 💡 Calculating **illuminated pedestrian routes** and avoiding dark alleyways\n• 🌐 Checking your **Dynamic Safe Bubble** and reachable refuge zones\n• 🚨 Providing instant guidance if you feel unsafe or need emergency assistance\n\n*How can I assist with your safety or route right now?*`,
+            abstained: false,
+            confidence_tier: "HIGH",
+            confidence_score: 100.0,
+            suggested_poi: null,
+            suggested_route: null,
+            follow_up_chips: [
+                "🛡️ Nearest safe haven",
+                "📍 Nearest hospital?",
+                "🌐 Safe Bubble status"
+            ]
+        };
+    }
+
+    // 5. Distance & Walking ETA Inquiry
+    if (matchesAnyFuzzyJS(qLower, distanceTargets, 0.82)) {
         let targetPoi = null;
-        if (qLower.includes('hospital') || qLower.includes('medical') || qLower.includes('doctor') || qLower.includes('medicover') || qLower.includes('manipal') || qLower.includes('lilavati')) {
+        if (matchesAnyFuzzyJS(qLower, hospTargets, 0.82)) {
             targetPoi = activePois.find(p => p.category === 'hospital');
-        } else if (qLower.includes('police') || qLower.includes('cop') || qLower.includes('cyberabad') || qLower.includes('station')) {
+        } else if (matchesAnyFuzzyJS(qLower, policeTargets, 0.82)) {
             targetPoi = activePois.find(p => p.category === 'police');
-        } else if (qLower.includes('pharmacy') || qLower.includes('chemist') || qLower.includes('apollo') || qLower.includes('medplus')) {
+        } else if (matchesAnyFuzzyJS(qLower, pharmTargets, 0.82)) {
             targetPoi = activePois.find(p => p.category === 'pharmacy');
         } else if (qLower.includes('metro') || qLower.includes('transit') || qLower.includes('train')) {
             targetPoi = activePois.find(p => p.category === 'transport_hub');
         } else if (qLower.includes('fire')) {
             targetPoi = activePois.find(p => p.category === 'fire_station');
         } else {
-            targetPoi = state.selectedPoi;
+            targetPoi = state.selectedPoi || state.lastCopilotPoi;
         }
 
         if (!targetPoi) {
@@ -2097,12 +2358,18 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 96.0,
             suggested_poi: targetPoi,
-            suggested_route: targetRoute
+            suggested_route: targetRoute,
+            follow_up_chips: [
+                "🕒 Is it open right now?",
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "📞 Contact number"
+            ]
         };
     }
 
     // 6. Emergency / Distress Intent
-    if (["emergency", "help", "not safe", "danger", "scared", "threat", "following me", "stalker", "attack", "sos"].some(w => qLower.includes(w))) {
+    if (matchesAnyFuzzyJS(qLower, distressTargets, 0.82)) {
         const sorted = [...activePois].map(p => ({ ...p, d: calcHaversineMeters(userLat, userLon, p.lat, p.lon) })).sort((a, b) => a.d - b.d);
         const bestPoi = sorted.find(p => p.category === 'police') || sorted[0];
         const bestRoute = generateClientOfflineRoute(userLat, userLon, bestPoi).safest_route;
@@ -2113,12 +2380,60 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 98.0,
             suggested_poi: bestPoi,
-            suggested_route: bestRoute
+            suggested_route: bestRoute,
+            follow_up_chips: [
+                "📞 Call Emergency (112)",
+                "🔍 Why this route?",
+                "⚖️ Compare route lighting",
+                "🌐 Safe Bubble status"
+            ]
         };
     }
 
-    // 7. Category Inquiries
-    if (qLower.includes('hospital') || qLower.includes('medical') || qLower.includes('doctor')) {
+    // 7. Operating Hours / Timings Intent
+    if ((matchesAnyFuzzyJS(qLower, timingTargets, 0.82) || ["open", "hours", "timing", "timings", "close"].some(w => qLower.includes(w))) && !qLower.includes('bubble') && !qLower.includes('incident')) {
+        const targetPoi = state.selectedPoi || state.lastCopilotPoi || activePois[0];
+        const targetRoute = generateClientOfflineRoute(userLat, userLon, targetPoi).safest_route;
+        return {
+            query: query,
+            response_text: `🕒 **Operating Hours for ${targetPoi.name}** (${(targetPoi.category || '').toUpperCase()}):\n\n• **Status**: **${targetPoi.opening_hours || '24/7'}**\n• **Accessibility**: ${(targetPoi.accessibility || 'Full').toUpperCase()}\n• **Walking Distance**: ${targetRoute.distance_meters}m (~${targetRoute.duration_minutes} min walk)\n• **Emergency Phone**: ${targetPoi.phone || 'Emergency 112 / 100'}\n\nThe illuminated safe corridor is active on your map.`,
+            abstained: false,
+            confidence_tier: "HIGH",
+            confidence_score: 96.0,
+            suggested_poi: targetPoi,
+            suggested_route: targetRoute,
+            follow_up_chips: [
+                "📍 How far is it?",
+                "⚖️ Compare with fastest",
+                "📞 What is their phone number?",
+                "🛡️ Other safe havens"
+            ]
+        };
+    }
+
+    // 8. Phone / Contact Intent
+    if ((matchesAnyFuzzyJS(qLower, phoneTargets, 0.82) || ["phone", "call", "contact", "number"].some(w => qLower.includes(w))) && !qLower.includes('bubble') && !qLower.includes('incident')) {
+        const targetPoi = state.selectedPoi || state.lastCopilotPoi || activePois[0];
+        const targetRoute = generateClientOfflineRoute(userLat, userLon, targetPoi).safest_route;
+        return {
+            query: query,
+            response_text: `📞 **Contact Details for ${targetPoi.name}** (${(targetPoi.category || '').toUpperCase()}):\n\n• **Telephone**: **${targetPoi.phone || 'Direct emergency 112 / 100'}**\n• **Facility**: ${(targetPoi.category || '').toUpperCase()}\n• **Operating Hours**: ${targetPoi.opening_hours || '24/7'}\n\nTap the call button in the message to dial directly.`,
+            abstained: false,
+            confidence_tier: "HIGH",
+            confidence_score: 96.0,
+            suggested_poi: targetPoi,
+            suggested_route: targetRoute,
+            follow_up_chips: [
+                "🗺️ Show on map",
+                "📍 How far is it?",
+                "🕒 Is it open right now?",
+                "⚖️ Compare routes"
+            ]
+        };
+    }
+
+    // 9. Category Inquiries (Fuzzy Enabled)
+    if (matchesAnyFuzzyJS(qLower, hospTargets, 0.82)) {
         const hosp = activePois.find(p => p.category === 'hospital') || activePois[0];
         const hospRoute = generateClientOfflineRoute(userLat, userLon, hosp).safest_route;
         return {
@@ -2128,11 +2443,17 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 95.0,
             suggested_poi: hosp,
-            suggested_route: hospRoute
+            suggested_route: hospRoute,
+            follow_up_chips: [
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "🕒 Is it open right now?",
+                "📞 What is their phone number?"
+            ]
         };
     }
 
-    if (qLower.includes('police') || qLower.includes('cop') || qLower.includes('safe place') || qLower.includes('safest')) {
+    if (matchesAnyFuzzyJS(qLower, policeTargets, 0.82)) {
         const police = activePois.find(p => p.category === 'police') || activePois[0];
         const policeRoute = generateClientOfflineRoute(userLat, userLon, police).safest_route;
         return {
@@ -2142,11 +2463,17 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 98.0,
             suggested_poi: police,
-            suggested_route: policeRoute
+            suggested_route: policeRoute,
+            follow_up_chips: [
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "🕒 Is it open right now?",
+                "📞 Contact number"
+            ]
         };
     }
 
-    if (qLower.includes('pharmacy') || qLower.includes('chemist') || qLower.includes('medicine')) {
+    if (matchesAnyFuzzyJS(qLower, pharmTargets, 0.82)) {
         const pharm = activePois.find(p => p.category === 'pharmacy') || activePois[0];
         const pharmRoute = generateClientOfflineRoute(userLat, userLon, pharm).safest_route;
         return {
@@ -2156,11 +2483,17 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 94.0,
             suggested_poi: pharm,
-            suggested_route: pharmRoute
+            suggested_route: pharmRoute,
+            follow_up_chips: [
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "🕒 Is it open right now?",
+                "📍 How far is it?"
+            ]
         };
     }
 
-    if (qLower.includes('compare') || qLower.includes('fastest') || qLower.includes('fast vs safe')) {
+    if (matchesAnyFuzzyJS(qLower, compareTargets, 0.82)) {
         return {
             query: query,
             response_text: `⚖️ **Route Comparison (Offline Engine)**:\n\n• **Safest Route**: ${route.safest_route.duration_minutes} min (${route.safest_route.distance_meters}m) | Safety: **96/100** | Lighting: **95%**\n• **Fastest Route**: ${route.fastest_route.duration_minutes} min (${route.fastest_route.distance_meters}m) | Safety: **55/100** | Lighting: **25%**\n\nThe Safest Route avoids unlit alleys and maximizes street illumination.`,
@@ -2168,11 +2501,17 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 95.0,
             suggested_poi: dest,
-            suggested_route: route.safest_route
+            suggested_route: route.safest_route,
+            follow_up_chips: [
+                "🔍 Why choose safest?",
+                "📍 How far is it?",
+                "🕒 Is it open right now?",
+                "🌐 Safe Bubble status"
+            ]
         };
     }
 
-    if (qLower.includes('why') || qLower.includes('explain') || qLower.includes('reason')) {
+    if (matchesAnyFuzzyJS(qLower, whyTargets, 0.82)) {
         return {
             query: query,
             response_text: `I recommended **${dest.name}** via the Safest Route because:\n\n1. **Street Lighting**: 95% illumination along main corridors.\n2. **Footpaths**: Dedicated pedestrian walkways throughout.\n3. **Facility Security**: Verified 24/7 on-site staffing.\n4. **Risk Reduction**: Avoids dark alley shortcuts with poor visibility.`,
@@ -2180,11 +2519,17 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 96.0,
             suggested_poi: dest,
-            suggested_route: route.safest_route
+            suggested_route: route.safest_route,
+            follow_up_chips: [
+                "⚖️ Compare with fastest",
+                "📍 How far is it?",
+                "🕒 Is it open right now?",
+                "🌐 Safe Bubble status"
+            ]
         };
     }
 
-    if (qLower.includes('bubble') || qLower.includes('status') || qLower.includes('am i safe') || qLower.includes('zone')) {
+    if (matchesAnyFuzzyJS(qLower, bubbleTargets, 0.82)) {
         const sorted = [...activePois].map(p => ({ ...p, d: calcHaversineMeters(userLat, userLon, p.lat, p.lon) })).sort((a, b) => a.d - b.d);
         const b5 = sorted.filter(p => p.d <= 450).length;
         const b10 = sorted.filter(p => p.d <= 900).length;
@@ -2196,7 +2541,13 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
             confidence_tier: "HIGH",
             confidence_score: 96.0,
             suggested_poi: sorted[0],
-            suggested_route: generateClientOfflineRoute(userLat, userLon, sorted[0]).safest_route
+            suggested_route: generateClientOfflineRoute(userLat, userLon, sorted[0]).safest_route,
+            follow_up_chips: [
+                "🏥 Nearest hospital?",
+                "🚔 Nearest police station?",
+                "💊 24/7 Pharmacy",
+                "⚖️ Compare routes"
+            ]
         };
     }
 
@@ -2207,6 +2558,12 @@ function generateClientOfflineSLM(query, userLat, userLon, pois, dataAgeHours) {
         confidence_tier: "HIGH",
         confidence_score: 96.0,
         suggested_poi: dest,
-        suggested_route: route.safest_route
+        suggested_route: route.safest_route,
+        follow_up_chips: [
+            "⚖️ Compare with fastest",
+            "🔍 Why this route?",
+            "📍 How far is it?",
+            "🌐 Safe Bubble status"
+        ]
     };
 }

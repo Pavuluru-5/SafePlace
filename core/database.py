@@ -32,7 +32,17 @@ class OfflineDatabase:
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or config.DATABASE_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._pois_cache: Optional[List[POI]] = None
+        self._poi_id_cache: Optional[Dict[str, POI]] = None
+        self._segments_cache: Optional[List[RoadSegment]] = None
+        self._incidents_cache: Optional[List[IncidentAggregate]] = None
         self._init_db()
+
+    def _invalidate_cache(self):
+        self._pois_cache = None
+        self._poi_id_cache = None
+        self._segments_cache = None
+        self._incidents_cache = None
 
     def _get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path))
@@ -123,6 +133,7 @@ class OfflineDatabase:
             conn.commit()
 
     def clear_all(self):
+        self._invalidate_cache()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM pois")
@@ -131,6 +142,7 @@ class OfflineDatabase:
             conn.commit()
 
     def insert_pois_batch(self, pois: List[POI]):
+        self._invalidate_cache()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.executemany("""
@@ -149,6 +161,7 @@ class OfflineDatabase:
             conn.commit()
 
     def insert_segments_batch(self, segments: List[RoadSegment]):
+        self._invalidate_cache()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.executemany("""
@@ -169,6 +182,7 @@ class OfflineDatabase:
             conn.commit()
 
     def insert_incidents_batch(self, incidents: List[IncidentAggregate]):
+        self._invalidate_cache()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.executemany("""
@@ -195,11 +209,13 @@ class OfflineDatabase:
         self.insert_incidents_batch([incident])
 
     def get_all_pois(self) -> List[POI]:
+        if self._pois_cache is not None:
+            return list(self._pois_cache)
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM pois")
             rows = cursor.fetchall()
-            return [
+            loaded = [
                 POI(
                     id=r["id"], name=r["name"], category=r["category"],
                     lat=r["lat"], lon=r["lon"], opening_hours=r["opening_hours"],
@@ -209,21 +225,29 @@ class OfflineDatabase:
                 )
                 for r in rows
             ]
+            self._pois_cache = loaded
+            self._poi_id_cache = {p.id: p for p in loaded}
+            return list(loaded)
 
     def get_poi_by_id(self, poi_id: str) -> Optional[POI]:
+        if self._poi_id_cache is not None:
+            return self._poi_id_cache.get(poi_id)
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM pois WHERE id = ?", (poi_id,))
             r = cursor.fetchone()
             if not r:
                 return None
-            return POI(
+            poi = POI(
                 id=r["id"], name=r["name"], category=r["category"],
                 lat=r["lat"], lon=r["lon"], opening_hours=r["opening_hours"],
                 accessibility=r["accessibility"], verification_status=r["verification_status"],
                 source=r["source"], last_updated=r["last_updated"], confidence=r["confidence"],
                 phone=r["phone"], address=r["address"], capacity_level=r["capacity_level"]
             )
+            if self._poi_id_cache is not None:
+                self._poi_id_cache[poi.id] = poi
+            return poi
 
     def get_nearby_pois(self, lat: float, lon: float, max_distance_meters: float = 3000.0, 
                         category: Optional[str] = None, limit: int = 20) -> List[Tuple[POI, float]]:
@@ -244,11 +268,13 @@ class OfflineDatabase:
         return results[:limit]
 
     def get_all_road_segments(self) -> List[RoadSegment]:
+        if self._segments_cache is not None:
+            return list(self._segments_cache)
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM road_segments")
             rows = cursor.fetchall()
-            return [
+            loaded = [
                 RoadSegment(
                     id=r["id"], u_node=r["u_node"], v_node=r["v_node"],
                     name=r["name"], road_type=r["road_type"],
@@ -262,13 +288,17 @@ class OfflineDatabase:
                 )
                 for r in rows
             ]
+            self._segments_cache = loaded
+            return list(loaded)
 
     def get_all_incident_aggregates(self) -> List[IncidentAggregate]:
+        if self._incidents_cache is not None:
+            return list(self._incidents_cache)
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM incident_aggregates")
             rows = cursor.fetchall()
-            return [
+            loaded = [
                 IncidentAggregate(
                     id=r["id"], area_grid=r["area_grid"], lat=r["lat"], lon=r["lon"],
                     radius_meters=r["radius_meters"], time_bucket=r["time_bucket"],
@@ -277,6 +307,8 @@ class OfflineDatabase:
                 )
                 for r in rows
             ]
+            self._incidents_cache = loaded
+            return list(loaded)
 
     def get_incidents_near_point(self, lat: float, lon: float, radius_meters: float = 500.0) -> List[IncidentAggregate]:
         incidents = self.get_all_incident_aggregates()

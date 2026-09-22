@@ -6,6 +6,8 @@ Compliant with Section 17, Section 18, Section 25, and Appendix B.
 """
 
 from typing import Dict, List, Any, Optional, Tuple
+import difflib
+import re
 from core.models import SLMResponse, POI, Route, SafeBubbleResult, ConfidenceScore
 from core.database import OfflineDatabase, haversine_distance_meters
 from core.risk_engine import SafetyRiskEngine
@@ -13,6 +15,52 @@ from core.confidence_engine import ConfidenceEngine
 from core.route_engine import SafeRouteEngine
 from core.safe_bubble import SafeBubbleMonitor
 import config
+
+
+LITERT_GEMMA_SYSTEM_PROMPT = """
+You are SafePlace Copilot, a specialized on-device personal safety assistant powered by Google LiteRT-LM (Gemma Compact).
+Your purpose is to protect users by identifying verified safe refuge havens (police stations, hospitals, 24/7 pharmacies, fire stations, civic centers), calculating illuminated corridors, and providing calm, actionable safety guidance.
+
+Guidelines:
+1. Grounded Tool Use: Always ground recommendations in verified local telemetry from approved local tools. Never hallucinate facilities or safety assurances.
+2. Responsible AI & "I Don't Know" Guardrail: If evidence is stale (> 14 days) or confidence is below 40%, explicitly abstain from unverified safety guarantees and advise calling 112 / staying on illuminated main avenues.
+3. Domain Restriction: You are exclusively a personal safety, emergency refuge, and safe navigation assistant. Do not answer general trivia, write code, tell jokes, or engage in unrelated tasks. Politely redirect the user back to safety and navigation.
+4. Calm & Clear Tone: Maintain a protective, supportive, and reassuring demeanor during distress inquiries.
+"""
+
+
+def fuzzy_token_match(token: str, targets: List[str], threshold: float = 0.80) -> bool:
+    """Checks if token or any target closely matches with similarity >= threshold."""
+    tok = token.lower()
+    if tok in targets:
+        return True
+    if len(tok) < 4:
+        return False
+    matches = difflib.get_close_matches(tok, targets, n=1, cutoff=threshold)
+    return len(matches) > 0
+
+
+def matches_any_fuzzy(text: str, targets: List[str], threshold: float = 0.80) -> bool:
+    """Checks if any target phrase or word matches the text as whole tokens or phrases."""
+    text_lower = text.lower()
+    clean_words = set(re.findall(r'\b[a-z0-9]+\b', text_lower))
+
+    for t in targets:
+        t_clean = t.lower()
+        if " " in t_clean:
+            if re.search(r'\b' + re.escape(t_clean) + r'\b', text_lower):
+                return True
+        else:
+            if t_clean in clean_words:
+                return True
+
+    # Token-level fuzzy match for words with len >= 4
+    for word in clean_words:
+        if len(word) >= 4:
+            single_targets = [t for t in targets if " " not in t and len(t) >= 4]
+            if fuzzy_token_match(word, single_targets, threshold=threshold):
+                return True
+    return False
 
 
 class OnDeviceSLMCopilot:
@@ -29,6 +77,8 @@ class OnDeviceSLMCopilot:
         self.confidence_engine = confidence_engine
         self.route_engine = route_engine
         self.safe_bubble_monitor = safe_bubble_monitor
+        self.last_selected_poi: Optional[POI] = None
+        self.last_query: Optional[str] = None
 
     # -------------------------------------------------------------
     # Controlled Local Tools (Approved Tool Invocation Interface)
@@ -133,7 +183,10 @@ class OnDeviceSLMCopilot:
         evidence = {}
 
         # 0. Greetings & Assistant Introduction
-        greeting_words = ["hi", "hello", "hey", "greetings", "namaste", "good morning", "good evening", "good afternoon", "how are you", "what's up", "hey there", "yo"]
+        greeting_words = [
+            "hi", "hello", "hey", "greetings", "namaste", "good morning", "good evening",
+            "good afternoon", "how are you", "what's up", "hey there", "yo", "namaskaram"
+        ]
         is_greeting = any(
             q_lower == w or 
             q_lower.startswith(w + " ") or 
@@ -143,7 +196,12 @@ class OnDeviceSLMCopilot:
             q_lower.endswith(" " + w)
             for w in greeting_words
         )
-        is_safety_query = any(w in q_lower for w in ["hospital", "police", "pharmacy", "route", "help", "emergency", "danger", "distance", "how far", "bubble", "why", "compare"])
+        is_safety_query = any(
+            w in q_lower for w in [
+                "hospital", "police", "pharmacy", "route", "help", "emergency", "danger",
+                "distance", "how far", "bubble", "why", "compare", "safe", "hazard", "threat"
+            ]
+        )
 
         if is_greeting and not is_safety_query:
             bubble = self.safe_bubble_monitor.calculate_safe_bubble(user_lat, user_lon, travel_mode=travel_mode, age_hours_override=age_hours_override)
@@ -169,11 +227,20 @@ class OnDeviceSLMCopilot:
                 confidence_tier="HIGH",
                 confidence_score=bubble.overall_zone_confidence,
                 tool_calls=tool_calls_record,
-                evidence_grounding={"status": bubble.status_message}
+                evidence_grounding={"status": bubble.status_message},
+                follow_up_chips=[
+                    "🛡️ Safest place nearby?",
+                    "📍 Nearest hospital?",
+                    "🌐 Safe Bubble status",
+                    "⚖️ Compare routes"
+                ]
             )
 
         # Conversational Acknowledgements & Pleasantries
-        pleasantry_words = ["thanks", "thank you", "thx", "ok", "okay", "great", "got it", "cool", "perfect", "awesome", "bye", "goodbye", "see you", "alright", "sure", "sounds good", "nice"]
+        pleasantry_words = [
+            "thanks", "thank you", "thx", "ok", "okay", "great", "got it", "cool", "perfect",
+            "awesome", "bye", "goodbye", "see you", "alright", "sure", "sounds good", "nice"
+        ]
         is_pleasantry = any(
             q_lower == w or 
             q_lower.startswith(w + " ") or 
@@ -194,7 +261,12 @@ class OnDeviceSLMCopilot:
                 confidence_tier="HIGH",
                 confidence_score=100.0,
                 tool_calls=[{"tool": "conversational_acknowledgement", "args": {}, "status": "OK"}],
-                evidence_grounding={"mode": "active_monitoring"}
+                evidence_grounding={"mode": "active_monitoring"},
+                follow_up_chips=[
+                    "🛡️ Where is the safest haven?",
+                    "📍 Nearest hospital?",
+                    "🌐 Safe Bubble status"
+                ]
             )
 
         # Capabilities / Help intent
@@ -214,38 +286,194 @@ class OnDeviceSLMCopilot:
                 confidence_tier="HIGH",
                 confidence_score=100.0,
                 tool_calls=[{"tool": "get_system_capabilities", "args": {}, "status": "OK"}],
-                evidence_grounding={"mode": "offline_first"}
+                evidence_grounding={"mode": "offline_first"},
+                follow_up_chips=[
+                    "🛡️ Safest place nearby?",
+                    "🔍 Why choose safest route?",
+                    "🌐 Safe Bubble status"
+                ]
+            )
+
+        all_pois = self.db.get_all_pois()
+
+        # -------------------------------------------------------------
+        # Comprehensive Keyword & Intent Clusters (Fuzzy & Semantic)
+        # -------------------------------------------------------------
+        category_keywords = {
+            "hospital": [
+                "hospital", "clinic", "doctor", "doc", "physician", "trauma", "medical", "medicine",
+                "ambulance", "emergency room", "er", "medicover", "lilavati", "rml", "manipal",
+                "sassoon", "ruby hall", "healthcare", "nurse", "bleeding", "injury", "injured",
+                "wound", "hurt", "fracture", "patient", "health center", "urgent care", "casualty"
+            ],
+            "police": [
+                "police", "cop", "cops", "station", "precinct", "cyberabad", "cubbon", "bandra",
+                "parliament", "security", "patrol", "constable", "law enforcement", "chowki", "thana",
+                "guard", "watchman", "safety post", "police booth", "checkpoint", "escort", "protection"
+            ],
+            "pharmacy": [
+                "pharmacy", "chemist", "drug", "drugstore", "apollo", "medplus", "noble", "first aid",
+                "prescription", "bandage", "bandages", "antiseptic", "gauze", "plaster", "pills",
+                "tablets", "syrup", "medical store", "dispensary", "medication", "painkiller"
+            ],
+            "transport_hub": [
+                "metro", "transit", "train", "bus", "station", "transport", "subway", "railway",
+                "terminal", "junction", "depot", "stop"
+            ],
+            "fire_station": [
+                "fire", "firefighter", "brigade", "fire engine", "extinguisher", "rescue station", "fire station"
+            ],
+            "public_building": [
+                "public", "civic", "library", "shelter", "community", "command center", "refuge",
+                "commissionerate", "civic center", "town hall"
+            ]
+        }
+
+        distress_keywords = [
+            "emergency", "help", "not safe", "danger", "scared", "urgent", "unsafe", "threat",
+            "following me", "stalker", "stalking", "attack", "attacked", "sos", "frightened",
+            "nervous", "jittery", "uneasy", "creepy", "creeping", "suspicious", "harassment",
+            "harassed", "save me", "panic", "threatened", "follow me", "afraid", "alone and scared",
+            "trouble", "distress", "protect me", "rescue me"
+        ]
+
+        why_keywords = [
+            "why", "reason", "explain", "choose", "how come", "why this", "rationale", "justify",
+            "why that", "why recommend", "basis", "criteria", "explanation"
+        ]
+
+        compare_keywords = [
+            "compare", "fastest", "fast vs safe", "difference", "shortest", "quickest", "vs",
+            "which is better", "better route", "which way", "better lit", "illumination",
+            "street lighting", "more lights", "dark alley", "shortcut", "brighter", "compare routes"
+        ]
+
+        bubble_keywords = [
+            "bubble", "area", "around", "zone", "isochrone", "reachability", "5 min", "10 min",
+            "15 min", "reachable", "haven", "perimeter", "vicinity", "how many places", "safe zone"
+        ]
+
+        area_safety_keywords = [
+            "incident", "crime", "hazard", "dark", "lighting", "safe to walk", "dangerous",
+            "night", "streets", "safety level", "hazards", "is it safe", "how safe", "risk level",
+            "streetlights", "well lit", "cctv"
+        ]
+
+        timing_keywords = [
+            "open", "hours", "timing", "timings", "opening hours", "operating hours",
+            "close", "closing", "closing time", "is it open", "are they open", "schedule"
+        ]
+
+        phone_keywords = [
+            "phone", "call", "telephone", "contact", "contact number", "phone number",
+            "mobile", "number", "dial", "reach them", "call them", "speak to someone"
+        ]
+
+        distance_keywords = [
+            "how far", "distance", "how long", "walking time", "how many minutes", "how many meters",
+            "eta", "time to walk", "far is", "how close", "how near", "steps to", "minutes away", "walk time"
+        ]
+
+        general_safety_phrases = [
+            "safe", "safety", "safest", "place", "places", "route", "routes", "path", "corridor",
+            "walk", "walking", "direction", "directions", "where", "location", "go", "head",
+            "take me", "navigate", "navigation", "map", "reach", "refuge", "protection",
+            "guide", "guidance", "assist", "surroundings", "copilot", "safeplace", "help me"
+        ]
+
+        # -------------------------------------------------------------
+        # Responsible AI Out-of-Domain (OOD) Guardrail
+        # -------------------------------------------------------------
+        in_domain_tokens = set(general_safety_phrases)
+        for kw_list in category_keywords.values():
+            in_domain_tokens.update(kw_list)
+        for kw_list in [
+            distress_keywords, why_keywords, compare_keywords, bubble_keywords,
+            area_safety_keywords, distance_keywords, timing_keywords, phone_keywords
+        ]:
+            in_domain_tokens.update(kw_list)
+
+        for p in all_pois:
+            for word in p.name.lower().split():
+                if len(word) > 2 and word not in ["the", "and", "for", "near"]:
+                    in_domain_tokens.add(word)
+
+        # Check domain membership (phrase containment, token match, or fuzzy match)
+        common_phrases = [
+            "how far", "how long", "not safe", "safe place", "safe bubble", "which way",
+            "safe route", "fastest route", "safest route", "street lighting", "street lights",
+            "is it open", "are they open", "phone number", "call them", "how to call", "opening hours"
+        ]
+        is_in_domain = any(p in q_lower for p in common_phrases)
+        if not is_in_domain and self.last_selected_poi:
+            # Multi-turn context: If referring to previously discussed POI
+            context_followup_words = [
+                "it", "they", "them", "there", "open", "hours", "timing", "timings",
+                "phone", "call", "number", "far", "distance", "why", "compare"
+            ]
+            if any(re.search(rf'\b{w}\b', q_lower) for w in context_followup_words):
+                is_in_domain = True
+
+        if not is_in_domain:
+            q_clean_words = set(re.findall(r'\b[a-z0-9]+\b', q_lower))
+            if any(w in in_domain_tokens for w in q_clean_words):
+                is_in_domain = True
+            else:
+                single_in_domain = [t for t in in_domain_tokens if " " not in t and len(t) >= 4]
+                for word in q_clean_words:
+                    if len(word) >= 4 and fuzzy_token_match(word, single_in_domain, threshold=0.82):
+                        is_in_domain = True
+                        break
+
+        if not is_in_domain:
+            response_text = (
+                "I am your **SafePlace AI Safety Copilot**, dedicated exclusively to personal safety, safe refuge, and illuminated navigation.\n\n"
+                "I don't have information on general topics, but I can assist you with:\n"
+                "• 🛡️ Finding the nearest **verified haven** (Police Station, Hospital, 24/7 Pharmacy)\n"
+                "• 💡 Calculating **illuminated pedestrian routes** and avoiding dark alleyways\n"
+                "• 🌐 Checking your **Dynamic Safe Bubble** and reachable refuge zones\n"
+                "• 🚨 Providing instant guidance if you feel unsafe or need emergency assistance\n\n"
+                "*How can I assist with your safety or route right now?*"
+            )
+            return SLMResponse(
+                query=query,
+                response_text=response_text,
+                abstained=False,
+                confidence_tier="HIGH",
+                confidence_score=100.0,
+                tool_calls=[{"tool": "domain_guardrail_filter", "args": {"status": "OUT_OF_DOMAIN"}, "status": "FILTERED"}],
+                evidence_grounding={"domain": "safety_only", "query_classified_as": "out_of_domain"},
+                suggested_poi=None,
+                suggested_route=None,
+                follow_up_chips=[
+                    "🛡️ Nearest safe haven",
+                    "📍 Nearest hospital?",
+                    "🌐 Safe Bubble status"
+                ]
             )
 
         # 1. Evaluate Safe Bubble
         bubble = self.safe_bubble_monitor.calculate_safe_bubble(user_lat, user_lon, travel_mode=travel_mode, age_hours_override=age_hours_override)
         tool_calls_record.append({"tool": "get_safe_bubble", "args": {"lat": user_lat, "lon": user_lon}, "status": "OK"})
-
-        all_pois = self.db.get_all_pois()
         tool_calls_record.append({"tool": "find_nearby_pois", "args": {"lat": user_lat, "lon": user_lon, "count": len(all_pois)}, "status": "OK"})
 
-        # Check for specific category requests
+        # Check for specific category requests (fuzzy-enabled)
         target_category = None
-        category_keywords = {
-            "hospital": ["hospital", "clinic", "doctor", "trauma", "medical", "ambulance", "emergency room", "medicover", "lilavati", "rml", "manipal"],
-            "police": ["police", "cop", "station", "precinct", "cyberabad", "cubbon", "bandra", "parliament", "security", "patrol", "constable"],
-            "pharmacy": ["pharmacy", "chemist", "medicine", "drug", "apollo", "medplus", "noble", "first aid", "prescription"],
-            "transport_hub": ["metro", "transit", "train", "bus", "station", "transport", "subway", "railway"],
-            "fire_station": ["fire", "firefighter", "brigade", "fire engine", "extinguisher"],
-            "public_building": ["public", "civic", "library", "shelter", "community", "command center"]
-        }
-
         for cat, kw_list in category_keywords.items():
-            if any(kw in q_lower for kw in kw_list):
+            if matches_any_fuzzy(q_lower, kw_list, threshold=0.82):
                 target_category = cat
                 break
 
-        # Check for specific POI name match
+        # Check for specific POI name match (exact and fuzzy)
         matched_poi = None
+        q_tokens = re.findall(r'\b[a-z0-9]+\b', q_lower)
         for p in all_pois:
             p_clean = p.name.lower()
             p_words = [w for w in p_clean.split() if len(w) > 3 and w not in ["station", "hospital", "pharmacy", "center", "care"]]
             if p_clean in q_lower or any(w in q_lower for w in p_words):
+                matched_poi = p
+                break
+            if any(fuzzy_token_match(q_tok, p_words, threshold=0.82) for q_tok in q_tokens):
                 matched_poi = p
                 break
 
@@ -258,6 +486,15 @@ class OnDeviceSLMCopilot:
             if cat_pois:
                 cat_pois.sort(key=lambda p: haversine_distance_meters(user_lat, user_lon, p.lat, p.lon))
                 selected_poi = cat_pois[0]
+
+        # Multi-turn contextual resolution: if user refers to previous haven or asks follow-up
+        if not selected_poi and self.last_selected_poi:
+            context_followup_words = [
+                "it", "they", "them", "there", "open", "timing", "timings", "hours",
+                "phone", "call", "contact", "number", "far", "distance", "why", "compare", "is it"
+            ]
+            if any(re.search(rf'\b{w}\b', q_lower) for w in context_followup_words) or len(q_tokens) <= 4:
+                selected_poi = self.last_selected_poi
 
         if not selected_poi:
             best_dest_info = bubble.recommended_destination
@@ -273,7 +510,11 @@ class OnDeviceSLMCopilot:
                 confidence_tier="UNKNOWN",
                 confidence_score=0.0,
                 tool_calls=tool_calls_record,
-                evidence_grounding={}
+                evidence_grounding={},
+                follow_up_chips=[
+                    "🛡️ Safe Bubble status",
+                    "📞 Dial Emergency 112"
+                ]
             )
 
         # 2. Evaluate Confidence & Check Abstention
@@ -304,7 +545,12 @@ class OnDeviceSLMCopilot:
                     "distance_km": round(dist_km, 2),
                     "reason_for_abstention": conf.explanation
                 },
-                suggested_poi=selected_poi
+                suggested_poi=selected_poi,
+                follow_up_chips=[
+                    "🌐 Check Safe Bubble",
+                    "📞 Dial Emergency 112",
+                    "🛡️ Nearest verified haven"
+                ]
             )
 
         # 4. Calculate Routes to selected POI
@@ -321,10 +567,10 @@ class OnDeviceSLMCopilot:
         evidence["distance_m"] = safest_route.distance_meters
         evidence["duration_min"] = safest_route.duration_minutes
 
-        # 5. Formulate Grounded Natural Language Responses based on Intent
+        # 5. Formulate Grounded Natural Language Responses based on Fuzzy Intent Matching
 
         # Intent: Emergency / Distress
-        if any(w in q_lower for w in ["emergency", "help", "not safe", "danger", "scared", "urgent", "unsafe", "threat", "following me", "stalker", "attack", "sos"]):
+        if matches_any_fuzzy(q_lower, distress_keywords, threshold=0.82):
             response_text = (
                 f"🚨 **Emergency Guidance Active**:\n\n"
                 f"Proceed directly to **{selected_poi.name}** ({selected_poi.category.replace('_', ' ').title()}), located **{safest_route.distance_meters:.0f} meters away** (~{safest_route.duration_minutes:.1f} min walk).\n\n"
@@ -333,9 +579,53 @@ class OnDeviceSLMCopilot:
                 f"• **Phone Contact**: {selected_poi.phone or 'Emergency 112 / 100'}\n"
                 f"• **Confidence**: {conf.score:.0f}% ({conf.tier} Tier, verified {conf.data_age_hours:.1f}h ago)."
             )
+            follow_up_chips = [
+                "📞 Call Emergency (112)",
+                "🔍 Why this route?",
+                "⚖️ Compare route lighting",
+                "🌐 Safe Bubble status"
+            ]
+
+        # Intent: Operating Hours / Timings
+        elif (any(w in q_lower for w in ["open", "hours", "timing", "timings", "close", "schedule"]) or
+              matches_any_fuzzy(q_lower, timing_keywords, threshold=0.82)) and not any(w in q_lower for w in ["bubble", "incident", "compare"]):
+            response_text = (
+                f"🕒 **Operating Hours for {selected_poi.name}** ({selected_poi.category.replace('_', ' ').title()}):\n\n"
+                f"• **Status**: **{selected_poi.opening_hours}**\n"
+                f"• **Accessibility**: {selected_poi.accessibility.replace('_', ' ').title()}\n"
+                f"• **Walking Distance**: {safest_route.distance_meters:.0f} m (~{safest_route.duration_minutes:.1f} min walk)\n"
+                f"• **Emergency Phone**: {selected_poi.phone or 'Emergency 112 / 100'}\n"
+                f"• **Address**: {selected_poi.address or 'Verified municipal refuge location'}\n\n"
+                f"The safe illuminated corridor to this haven is currently active on your map."
+            )
+            follow_up_chips = [
+                "📍 How far is it?",
+                "⚖️ Compare with fastest",
+                "📞 What is their phone number?",
+                "🛡️ Other safe places nearby"
+            ]
+
+        # Intent: Phone / Contact Details
+        elif (any(w in q_lower for w in ["phone", "call", "contact", "number", "telephone", "dial"]) or
+              matches_any_fuzzy(q_lower, phone_keywords, threshold=0.82)) and not any(w in q_lower for w in ["bubble", "incident", "compare"]):
+            phone_num = selected_poi.phone or "Direct Emergency: 112 (Police) / 108 (Ambulance)"
+            response_text = (
+                f"📞 **Contact Details for {selected_poi.name}** ({selected_poi.category.replace('_', ' ').title()}):\n\n"
+                f"• **Telephone**: **{phone_num}**\n"
+                f"• **Facility**: {selected_poi.category.replace('_', ' ').title()}\n"
+                f"• **Operating Hours**: {selected_poi.opening_hours}\n"
+                f"• **Address**: {selected_poi.address or 'Verified municipal refuge location'}\n\n"
+                f"You can use the action buttons below to view directions or call directly."
+            )
+            follow_up_chips = [
+                "🗺️ Show on map",
+                "📍 How far is it?",
+                "🕒 Is it open right now?",
+                "⚖️ Compare routes"
+            ]
 
         # Intent: Why / Explanation Intent (Section 35)
-        elif any(w in q_lower for w in ["why", "reason", "explain", "choose", "how come", "why this"]):
+        elif matches_any_fuzzy(q_lower, why_keywords, threshold=0.82):
             time_diff = max(0.2, safest_route.duration_minutes - fastest_route.duration_minutes)
             response_text = (
                 f"I recommended **{selected_poi.name}** via the **Safest Route** because:\n\n"
@@ -344,9 +634,15 @@ class OnDeviceSLMCopilot:
                 f"3. **Lower Risk**: Avoids unlit alley cuts, trading just ~{time_diff:.1f} extra minutes for significantly lower estimated hazard exposure.\n"
                 f"4. **Data Trust**: Grounded in high-confidence municipal telemetry ({conf.score:.0f}% confidence, data age: {conf.data_age_hours:.1f}h)."
             )
+            follow_up_chips = [
+                "⚖️ Compare with fastest",
+                "📍 How far is it?",
+                "🕒 Is it open right now?",
+                "🌐 Safe Bubble status"
+            ]
 
         # Intent: Route Comparison Intent (Section 14)
-        elif any(w in q_lower for w in ["compare", "fastest", "fast vs safe", "difference", "shortest", "quickest", "vs"]):
+        elif matches_any_fuzzy(q_lower, compare_keywords, threshold=0.82):
             time_saved = max(0.2, safest_route.duration_minutes - fastest_route.duration_minutes)
             lighting_loss = max(0.0, safest_route.lighting_percentage - fastest_route.lighting_percentage)
             response_text = (
@@ -355,9 +651,15 @@ class OnDeviceSLMCopilot:
                 f"• **Fastest Route (Amber)**: {fastest_route.duration_minutes:.1f} min ({fastest_route.distance_meters:.0f}m) | Safety Score: **{fastest_route.safety_score:.0f}/100** | Illumination: **{fastest_route.lighting_percentage:.0f}%**\n\n"
                 f"💡 **Trade-off Analysis**: The fastest route saves ~{time_saved:.1f} minutes by cutting through unlit alleys, but reduces street lighting by {lighting_loss:.0f}% and increases risk exposure. The Safest Route is strongly advised."
             )
+            follow_up_chips = [
+                "🔍 Why choose safest?",
+                "📍 How far is it?",
+                "🕒 Is it open right now?",
+                "🌐 Safe Bubble status"
+            ]
 
         # Intent: Safe Bubble Status (Section 15)
-        elif any(w in q_lower for w in ["bubble", "area", "around", "zone", "isochrone", "reachability", "5 min", "10 min", "15 min"]):
+        elif matches_any_fuzzy(q_lower, bubble_keywords, threshold=0.82):
             b5_count = len(bubble.bands[0].destinations) if len(bubble.bands) > 0 else 0
             b10_count = len(bubble.bands[1].destinations) if len(bubble.bands) > 1 else 0
             b15_count = len(bubble.bands[2].destinations) if len(bubble.bands) > 2 else 0
@@ -370,9 +672,15 @@ class OnDeviceSLMCopilot:
                 f"• **Zone Confidence**: {bubble.overall_zone_confidence:.0f}% ({conf.tier} Tier)\n"
                 f"• **Status**: {bubble.status_message}"
             )
+            follow_up_chips = [
+                "🏥 Nearest hospital?",
+                "🚔 Nearest police station?",
+                "💊 24/7 Pharmacy",
+                "⚖️ Compare routes"
+            ]
 
         # Intent: Area Safety / Lighting / Incident Summary
-        elif any(w in q_lower for w in ["incident", "crime", "hazard", "dark", "lighting", "safe to walk", "dangerous", "night", "streets"]):
+        elif matches_any_fuzzy(q_lower, area_safety_keywords, threshold=0.82):
             incidents = self.tool_get_incidents(user_lat, user_lon, radius=1000.0)
             tool_calls_record.append({"tool": "get_incidents", "args": {"lat": user_lat, "lon": user_lon, "radius": 1000.0}, "status": "OK"})
             inc_count = sum(i["count"] for i in incidents) if incidents else 0
@@ -384,9 +692,15 @@ class OnDeviceSLMCopilot:
                 f"• **Incident Aggregates**: {inc_count} historical incident reports recorded in surrounding 1km grid ({conf.tier} confidence tier).\n"
                 f"• **Guidance**: Stay along illuminated primary avenues highlighted in green on your map."
             )
+            follow_up_chips = [
+                "⚖️ Compare with fastest route",
+                "🔍 Why this route?",
+                "🛡️ Safest place nearby?",
+                "🌐 Safe Bubble status"
+            ]
 
         # Intent: Distance & Proximity Inquiry
-        elif any(w in q_lower for w in ["how far", "distance", "how long", "walking time", "how many minutes", "how many meters", "eta", "time to walk", "far is"]):
+        elif matches_any_fuzzy(q_lower, distance_keywords, threshold=0.82):
             dur_min = max(1.0, round(safest_route.duration_minutes, 1))
             dist_m = round(safest_route.distance_meters)
             response_text = (
@@ -398,6 +712,12 @@ class OnDeviceSLMCopilot:
                 f"• **Contact**: {selected_poi.phone or 'Emergency 112 / 100'}\n\n"
                 f"The illuminated safe corridor has been highlighted on your map."
             )
+            follow_up_chips = [
+                "🕒 Is it open right now?",
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "📞 Contact number"
+            ]
 
         # Intent: Category-specific POI search
         elif target_category:
@@ -412,6 +732,12 @@ class OnDeviceSLMCopilot:
                 f"• **Address**: {selected_poi.address or 'Verified municipal location'}\n\n"
                 f"The highlighted green path provides the safest route along illuminated corridors."
             )
+            follow_up_chips = [
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "🕒 Is it open right now?",
+                "📞 What is their phone number?"
+            ]
 
         # Intent: Specific POI name lookup
         elif matched_poi:
@@ -424,6 +750,12 @@ class OnDeviceSLMCopilot:
                 f"• **Operating Hours**: {selected_poi.opening_hours}\n\n"
                 f"Route directions and turn-by-turn steps have been loaded onto your navigation HUD."
             )
+            follow_up_chips = [
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "🕒 Is it open right now?",
+                "📞 What is their phone number?"
+            ]
 
         # General Safe Haven Query (Section 26)
         else:
@@ -434,6 +766,16 @@ class OnDeviceSLMCopilot:
                 f"• **Data Confidence**: {conf.score:.0f}% ({conf.tier} Tier)\n"
                 f"• **Key Evidence**: The recommended path stays along illuminated primary roads ({safest_route.lighting_percentage:.0f}% lighting) with verified 24/7 security presence."
             )
+            follow_up_chips = [
+                "⚖️ Compare with fastest",
+                "🔍 Why this route?",
+                "📍 How far is it?",
+                "🌐 Safe Bubble status"
+            ]
+
+        # Memorize contextual selection for conversational multi-turn dialogue
+        self.last_selected_poi = selected_poi
+        self.last_query = query
 
         return SLMResponse(
             query=query,
@@ -445,5 +787,6 @@ class OnDeviceSLMCopilot:
             tool_calls=tool_calls_record,
             evidence_grounding=evidence,
             suggested_route=safest_route,
-            suggested_poi=selected_poi
+            suggested_poi=selected_poi,
+            follow_up_chips=follow_up_chips
         )
